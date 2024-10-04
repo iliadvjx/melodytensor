@@ -11,7 +11,8 @@ import time
 import datetime
 import shutil
 import mmd
-baseDir = r'E:\Codes\Deep Learning\20200919Updatedyylab1Release1\20200919Updatedyylab1Release1\0919'
+#baseDir = r'E:\Codes\Deep Learning\20200919Updatedyylab1Release1\20200919Updatedyylab1Release1\0919'
+baseDir =  os.getcwd()
 
 def make_rnn_cell(rnn_layer_sizes,
                   dropout_keep_prob=1.0,
