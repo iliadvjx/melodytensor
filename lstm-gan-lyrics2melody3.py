@@ -514,7 +514,7 @@ def main():
           "Test set: ", np.shape(test)[0], " songs.")
 
     # Epoch counter initialization
-    global_step = 30
+    global_step = 0
 
     # empty lists for saving loss values at the end of each epoch
     train_g_loss_output = []
