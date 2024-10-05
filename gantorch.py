@@ -249,6 +249,7 @@ def main():
 
     # مقداردهی اولیه مدل
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print("RUN ON ", device)
     model = RNNGAN(num_song_features=NUM_MIDI_FEATURES, num_meta_features=NUM_SYLLABLE_FEATURES, songlength=SONGLENGTH, conditioning='multi')
     model.to(device)
 
