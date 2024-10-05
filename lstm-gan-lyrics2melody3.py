@@ -11,8 +11,8 @@ import time
 import datetime
 import shutil
 import mmd
-#baseDir = r'E:\Codes\Deep Learning\20200919Updatedyylab1Release1\20200919Updatedyylab1Release1\0919'
-baseDir =  os.getcwd()
+# baseDir = r'E:\Codes\Deep Learning\20200919Updatedyylab1Release1\20200919Updatedyylab1Release1\0919'
+baseDir = os.getcwd()
 
 def make_rnn_cell(rnn_layer_sizes,
                   dropout_keep_prob=1.0,
@@ -515,7 +515,7 @@ def main():
           "Test set: ", np.shape(test)[0], " songs.")
 
     # Epoch counter initialization
-    global_step = 0
+    global_step = 1
 
     # empty lists for saving loss values at the end of each epoch
     train_g_loss_output = []
@@ -637,7 +637,7 @@ def main():
                 except:
                     a = 0
                 output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
-                builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\epoch_models\model_epoch") + str(i))
+                builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/epoch_models/model_epoch") + str(i))
                 if CONDITION:
                     builder.add_meta_graph_and_variables(session, [], signature_def_map={
                         "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
@@ -774,7 +774,7 @@ def main():
                         a = 0
                     output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
                     
-                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model"))
+                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model"))
                     if CONDITION:
                         builder.add_meta_graph_and_variables(session, [], signature_def_map={
                             "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
@@ -827,7 +827,7 @@ def main():
                         a = 0
                     output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
                     
-                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model_best_pitch_mmd"))
+                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model_best_pitch_mmd"))
                     builder.add_meta_graph_and_variables(session, [], signature_def_map={
                         "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
                             inputs={m.keep_prob.name: m.keep_prob, m.input_songdata.name: m.input_songdata,
@@ -848,7 +848,7 @@ def main():
                         a = 0
                     output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
                     
-                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model_best_duration_mmd"))
+                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model_best_duration_mmd"))
                     builder.add_meta_graph_and_variables(session, [], signature_def_map={
                         "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
                             inputs={m.keep_prob.name: m.keep_prob, m.input_songdata.name: m.input_songdata,
@@ -869,7 +869,7 @@ def main():
                         a = 0
                     output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
                     
-                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model_best_rest_mmd"))
+                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model_best_rest_mmd"))
                     builder.add_meta_graph_and_variables(session, [], signature_def_map={
                         "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
                             inputs={m.keep_prob.name: m.keep_prob, m.input_songdata.name: m.input_songdata,
@@ -890,7 +890,7 @@ def main():
                         a = 0
                     output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
                     
-                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model_best_overall_mmd"))
+                    builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model_best_overall_mmd"))
                     builder.add_meta_graph_and_variables(session, [], signature_def_map={
                         "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
                             inputs={m.keep_prob.name: m.keep_prob, m.input_songdata.name: m.input_songdata,
@@ -919,7 +919,7 @@ def main():
                             a = 0
                         output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
                         
-                        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model_best_duration_mmd"))
+                        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model_best_duration_mmd"))
                         builder.add_meta_graph_and_variables(session, [], signature_def_map={
                             "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
                                 inputs={m.keep_prob.name: m.keep_prob, m.input_songdata.name: m.input_songdata,
@@ -946,7 +946,7 @@ def main():
                             a = 0
                         output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
                         
-                        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model_best_rest_mmd"))
+                        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model_best_rest_mmd"))
                         builder.add_meta_graph_and_variables(session, [], signature_def_map={
                             "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
                                 inputs={m.keep_prob.name: m.keep_prob, m.input_songdata.name: m.input_songdata,
@@ -973,7 +973,7 @@ def main():
                             a = 0
                         output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
                         
-                        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model_best_pitch_mmd"))
+                        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model_best_pitch_mmd"))
                         builder.add_meta_graph_and_variables(session, [], signature_def_map={
                             "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
                                 inputs={m.keep_prob.name: m.keep_prob, m.input_songdata.name: m.input_songdata,
@@ -996,7 +996,7 @@ def main():
             a = 0
         output = tf.convert_to_tensor(m.generated_features, name="output_midi", dtype=tf.float32)
         
-        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"saved_gan_models\saved_model_end_of_training"))
+        builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(os.path.join(baseDir,r"./saved_gan_models/saved_model_end_of_training"))
         if CONDITION:
             builder.add_meta_graph_and_variables(session, [], signature_def_map={
                 "output": tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
