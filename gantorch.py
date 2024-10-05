@@ -358,7 +358,7 @@ def main():
                 generated_features = model.generate(1, conditioning_data, training=False)
                 sample = generated_features.cpu().numpy().squeeze(0)
                 discretized_sample = utils.discretize(sample)
-                discretized_sample = midi_statistics.tune_song(discretized_sample)
+                discretized_sample = np.array(discretized_sample)  # تبدیل به آرایه NumPy
                 validation_songs.append(discretized_sample)
 
         # محاسبه MMD
