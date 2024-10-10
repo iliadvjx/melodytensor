@@ -357,7 +357,7 @@ def tune_song_c_scale(midi_pattern):
 
 
 def main():
-    test_data = np.load('./data/processed_dataset_matrices/test_data.npy')
+    test_data = np.load('./data/processed_dataset_matrices/test_data_matrix.npy')
     midi_pattern = []
     stats_scale_tot = 0
     stats_repetitions_2_tot = 0
