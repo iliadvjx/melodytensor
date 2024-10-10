@@ -387,6 +387,89 @@ def main():
             best_mmd_overall = MMD_overall
             best_epoch = epoch + 1
             torch.save(model.state_dict(), './saved_gan_models/best_model.pth')
+        
+            # ... [Existing code above]
+
+# Initialize lists to store metrics
+        midi_numbers_span_list = []
+        repetitions_3_list = []
+        repetitions_2_list = []
+        unique_midi_numbers_list = []
+        notes_without_rest_list = []
+        average_rest_value_list = []
+        song_length_list = []
+
+        # Validation loop
+        model.eval()
+        validation_songs = []
+        with torch.no_grad():
+            for i in range(len(validate)):
+                song_data = torch.rand(1, SONGLENGTH, NUM_MIDI_FEATURES).to(device)
+                if CONDITION:
+                    conditioning_data = validate[i, SONGLENGTH * NUM_MIDI_FEATURES:].reshape(1, SONGLENGTH, NUM_SYLLABLE_FEATURES)
+                    conditioning_data = torch.tensor(conditioning_data, dtype=torch.float32).to(device)
+                else:
+                    conditioning_data = None
+
+                generated_features = model.generate(1, conditioning_data, training=False)
+                sample = generated_features.cpu().numpy().squeeze(0)
+                discretized_sample = utils.discretize(sample)
+                discretized_sample = midi_statistics.tune_song(discretized_sample)
+                discretized_sample = np.array(discretized_sample)
+                validation_songs.append(discretized_sample)
+
+                # Compute metrics for the current song
+                midi_numbers = discretized_sample[:, 0]  # Assuming the first column is MIDI note numbers
+                rest_values = discretized_sample[:, 2]   # Assuming the third column is rest durations
+
+                # MIDI Numbers Span
+                midi_span = midi_numbers.max() - midi_numbers.min()
+                midi_numbers_span_list.append(midi_span)
+
+                # Repetitions of 3-MIDI numbers
+                repetitions_3 = midi_statistics.count_repetitions(midi_numbers, n=3)
+                repetitions_3_list.append(repetitions_3)
+
+                # Repetitions of 2-MIDI numbers
+                repetitions_2 = midi_statistics.count_repetitions(midi_numbers, n=2)
+                repetitions_2_list.append(repetitions_2)
+
+                # Number of Unique MIDI numbers
+                unique_midi_numbers = len(np.unique(midi_numbers))
+                unique_midi_numbers_list.append(unique_midi_numbers)
+
+                # Number of Notes Without Rest
+                notes_without_rest = np.sum(rest_values == 0)
+                notes_without_rest_list.append(notes_without_rest)
+
+                # Average Rest Value Within Song
+                average_rest = np.mean(rest_values)
+                average_rest_value_list.append(average_rest)
+
+                # Song Length
+                song_length = len(midi_numbers)
+                song_length_list.append(song_length)
+
+        # After processing all songs, compute the average metrics
+        avg_midi_span = np.mean(midi_numbers_span_list)
+        avg_repetitions_3 = np.mean(repetitions_3_list)
+        avg_repetitions_2 = np.mean(repetitions_2_list)
+        avg_unique_midi_numbers = np.mean(unique_midi_numbers_list)
+        avg_notes_without_rest = np.mean(notes_without_rest_list)
+        avg_average_rest_value = np.mean(average_rest_value_list)
+        avg_song_length = np.mean(song_length_list)
+
+        # Print the metrics
+        print(f"Average MIDI Numbers Span: {avg_midi_span:.1f}")
+        print(f"Average 3-MIDI Numbers Repetitions: {avg_repetitions_3:.1f}")
+        print(f"Average 2-MIDI Numbers Repetitions: {avg_repetitions_2:.1f}")
+        print(f"Average Number of Unique MIDI: {avg_unique_midi_numbers:.1f}")
+        print(f"Average Number of Notes Without Rest: {avg_notes_without_rest:.1f}")
+        print(f"Average Rest Value Within Song: {avg_average_rest_value:.1f}")
+        print(f"Average Song Length: {avg_song_length:.1f}")
+
+        # ... [Rest of your code]
+
 
     print(f"بهترین مدل در دوره {best_epoch} با MMD overall: {best_mmd_overall:.5f}")
 
