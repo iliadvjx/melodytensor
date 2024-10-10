@@ -354,6 +354,27 @@ def tune_song_c_scale(midi_pattern):
         return midi_pattern
     else:
         return midi_pattern
+# midi_statistics.py
+
+def count_repetitions(midi_numbers, n):
+    """
+    Counts the number of repeated sequences of n consecutive MIDI numbers.
+    """
+    repetitions = 0
+    seq_counts = {}
+    for i in range(len(midi_numbers) - n + 1):
+        seq = tuple(midi_numbers[i:i+n])
+        if seq in seq_counts:
+            seq_counts[seq] += 1
+        else:
+            seq_counts[seq] = 1
+
+    # Count sequences that occur more than once
+    for count in seq_counts.values():
+        if count > 1:
+            repetitions += count - 1  # Subtract 1 to count only repetitions
+
+    return repetitions
 
 
 def main():
