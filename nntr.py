@@ -24,7 +24,7 @@ FEED_COND_D = True
 RANDOM_INPUT_DIM = 100  # Adjusted to make the input dimension divisible by NUM_HEADS_G
 DROPOUT_KEEP_PROB = 0.1
 D_LR_FACTOR = 1
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.001
 PRETRAINING_D = False
 LR_DECAY = 0.98
 DATA_MATRIX = "data/processed_dataset_matrices/full_data_matrix.npy"
@@ -40,7 +40,7 @@ PRETRAINING_EPOCHS = 1
 NUM_MIDI_FEATURES = 3
 NUM_SYLLABLE_FEATURES = 20
 NUM_SONGS = 5000000
-BATCH_SIZE = 64
+BATCH_SIZE = 1000
 REG_SCALE = 1.0
 TRAIN_RATE = 0.8
 VALIDATION_RATE = 0.1
@@ -48,7 +48,7 @@ HIDDEN_SIZE_G = 256
 HIDDEN_SIZE_D = 256
 NUM_LAYERS_G = 4
 NUM_LAYERS_D = 4
-ADAM = False
+ADAM = True
 DISABLE_L2_REG = True
 MAX_GRAD_NORM = 5.0
 FEATURE_MATCHING = False
@@ -168,7 +168,25 @@ class TransformerGAN(nn.Module):
         # Average over time dimension
         decision = decision.mean(dim=1).squeeze()
         return decision
+    def generator_loss(self, fake_output):
+        target = torch.ones_like(fake_output)
+        return self.bce_loss(fake_output, target)
 
+    def discriminator_loss(self, real_output, fake_output, wrong_output=None):
+        real_target = torch.ones_like(real_output)
+        fake_target = torch.zeros_like(fake_output)
+
+        real_loss = self.bce_loss(real_output, real_target)
+        fake_loss = self.bce_loss(fake_output, fake_target)
+
+        if wrong_output is not None and LOSS_WRONG_D:
+            wrong_target = torch.zeros_like(wrong_output)
+            wrong_loss = self.bce_loss(wrong_output, wrong_target)
+            total_loss = real_loss + fake_loss + wrong_loss
+        else:
+            total_loss = real_loss + fake_loss
+
+        return total_loss
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
