@@ -39,7 +39,7 @@ PRETRAINING_EPOCHS = 1
 NUM_MIDI_FEATURES = 3
 NUM_SYLLABLE_FEATURES = 20
 NUM_SONGS = 5000000
-BATCH_SIZE = 300
+BATCH_SIZE = 256
 REG_SCALE = 1.0
 TRAIN_RATE = 0.8
 VALIDATION_RATE = 0.1
@@ -55,9 +55,9 @@ MAX_EPOCH = 400
 EPOCHS_BEFORE_DECAY = 30
 SONGLENGTH_CEILING = 20
 
-# Set number of heads to 5 to ensure divisibility
+# Set number of heads
 NUM_HEADS_G = 5
-NUM_HEADS_D = 4
+NUM_HEADS_D = 4  # Adjusted to match the padded embed_dim
 
 class TransformerGAN(nn.Module):
     def __init__(self, num_song_features, num_meta_features, songlength, conditioning='multi'):
@@ -68,20 +68,24 @@ class TransformerGAN(nn.Module):
         self.conditioning = conditioning
 
         # Generator
-        input_size_generator = int(RANDOM_INPUT_SCALE * num_song_features) + (num_meta_features if conditioning == 'multi' else 0)
+        input_size_generator = int(RANDOM_INPUT_SCALE * num_song_features) + (
+            num_meta_features if conditioning == 'multi' else 0
+        )
         self.generator_input_dim = input_size_generator  # Should be divisible by NUM_HEADS_G
         self.generator_output_dim = num_song_features
 
-        self.generator_positional_encoding = PositionalEncoding(self.generator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength)
+        self.generator_positional_encoding = PositionalEncoding(
+            self.generator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength
+        )
         self.generator_transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=self.generator_input_dim,
                 nhead=NUM_HEADS_G,
                 dim_feedforward=HIDDEN_SIZE_G,
                 dropout=1 - DROPOUT_KEEP_PROB,
-                activation='relu'
+                activation='relu',
             ),
-            num_layers=NUM_LAYERS_G
+            num_layers=NUM_LAYERS_G,
         )
         self.generator_dense = nn.Linear(self.generator_input_dim, self.generator_output_dim)
 
@@ -89,9 +93,9 @@ class TransformerGAN(nn.Module):
         input_size_discriminator = num_song_features + (
             num_meta_features if conditioning == 'multi' and FEED_COND_D else 0
         )
-        desired_embed_dim = 24  # Desired dimension divisible by NUM_HEADS_D
+        desired_embed_dim = 24  # Must be divisible by NUM_HEADS_D
         self.discriminator_padding_dim = desired_embed_dim - input_size_discriminator
-        self.discriminator_input_dim = desired_embed_dim  # Now 24
+        self.discriminator_input_dim = desired_embed_dim
         self.discriminator_output_dim = 1
 
         self.discriminator_positional_encoding = PositionalEncoding(
@@ -103,9 +107,9 @@ class TransformerGAN(nn.Module):
                 nhead=NUM_HEADS_D,
                 dim_feedforward=HIDDEN_SIZE_D,
                 dropout=1 - DROPOUT_KEEP_PROB,
-                activation='relu'
+                activation='relu',
             ),
-            num_layers=NUM_LAYERS_D
+            num_layers=NUM_LAYERS_D,
         )
         self.discriminator_dense = nn.Linear(self.discriminator_input_dim, self.discriminator_output_dim)
         self.discriminator_sigmoid = nn.Sigmoid()
@@ -118,7 +122,7 @@ class TransformerGAN(nn.Module):
         device = next(self.parameters()).device
         random_input = torch.rand(
             (batch_size, self.songlength, int(RANDOM_INPUT_SCALE * self.num_song_features)),
-            device=device
+            device=device,
         )
 
         if self.conditioning == 'multi' and conditioning_data is not None:
@@ -127,7 +131,9 @@ class TransformerGAN(nn.Module):
             generator_input = random_input
 
         # Apply positional encoding
-        generator_input = self.generator_positional_encoding(generator_input.permute(1, 0, 2))  # Shape: [sequence_length, batch_size, input_dim]
+        generator_input = self.generator_positional_encoding(
+            generator_input.permute(1, 0, 2)
+        )  # Shape: [sequence_length, batch_size, input_dim]
 
         gen_output = self.generator_transformer(generator_input)  # Shape: [sequence_length, batch_size, input_dim]
 
@@ -148,7 +154,7 @@ class TransformerGAN(nn.Module):
         if self.discriminator_padding_dim > 0:
             padding = torch.zeros(
                 (discriminator_input.size(0), discriminator_input.size(1), self.discriminator_padding_dim),
-                device=discriminator_input.device
+                device=discriminator_input.device,
             )
             discriminator_input = torch.cat([discriminator_input, padding], dim=-1)
 
@@ -157,10 +163,8 @@ class TransformerGAN(nn.Module):
             discriminator_input.permute(1, 0, 2)
         )
 
-        # Transformer processing
         disc_output = self.discriminator_transformer(discriminator_input)
 
-        # Continue as before
         disc_output = disc_output.permute(1, 0, 2)
         decision = self.discriminator_dense(disc_output)
         decision = self.discriminator_sigmoid(decision)
@@ -193,7 +197,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
-        
+
         pe = torch.zeros(max_len, d_model).float()
         pe.require_grad = False
 
@@ -204,7 +208,7 @@ class PositionalEncoding(nn.Module):
             pe[:, 1::2] = torch.cos(position * div_term[:-1])
         else:
             pe[:, 1::2] = torch.cos(position * div_term)
-        
+
         pe = pe.unsqueeze(1)  # Shape: [max_len, 1, d_model]
         self.register_buffer('pe', pe)
 
@@ -214,9 +218,6 @@ class PositionalEncoding(nn.Module):
         """
         x = x + self.pe[:x.size(0)]
         return self.dropout(x)
-
-
-# The rest of the code remains largely the same, except that you should replace instances of RNNGAN with TransformerGAN
 
 def train_step(model, song_data, conditioning_data, wrong_conditioning_data, batch_size, pretraining, generator_optimizer, discriminator_optimizer):
     device = next(model.parameters()).device
@@ -299,6 +300,7 @@ def main():
                 wrong_idx = np.random.randint(len(self.song_data))
                 wrong_condition = self.conditioning_data[wrong_idx].astype(np.float32)
                 return song, condition, wrong_condition
+
         dataset = MusicDataset(train)
     else:
         class MusicDataset(torch.utils.data.Dataset):
@@ -311,6 +313,7 @@ def main():
             def __getitem__(self, idx):
                 song = self.song_data[idx].astype(np.float32)
                 return song
+
         dataset = MusicDataset(train)
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
@@ -318,7 +321,12 @@ def main():
     # Initialize model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("RUN ON ", device)
-    model = TransformerGAN(num_song_features=NUM_MIDI_FEATURES, num_meta_features=NUM_SYLLABLE_FEATURES, songlength=SONGLENGTH, conditioning='multi')
+    model = TransformerGAN(
+        num_song_features=NUM_MIDI_FEATURES,
+        num_meta_features=NUM_SYLLABLE_FEATURES,
+        songlength=SONGLENGTH,
+        conditioning='multi',
+    )
     model.to(device)
 
     # Set up optimizers
@@ -356,7 +364,7 @@ def main():
         best_epoch = checkpoint['best_epoch']
         print(f"Loaded model from checkpoint at epoch {start_epoch}")
 
-    # Training loop remains the same
+    # Main training loop
     for epoch in range(start_epoch, MAX_EPOCH):
         start_time = time.time()
 
@@ -388,7 +396,7 @@ def main():
                 batch_size,
                 pretraining=(epoch < PRETRAINING_EPOCHS),
                 generator_optimizer=generator_optimizer,
-                discriminator_optimizer=discriminator_optimizer
+                discriminator_optimizer=discriminator_optimizer,
             )
             gen_losses.append(gen_loss)
             if disc_loss is not None:
@@ -402,18 +410,143 @@ def main():
 
         # Save model every 15 epochs
         if (epoch + 1) % 15 == 0:
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'generator_optimizer_state_dict': generator_optimizer.state_dict(),
-                'discriminator_optimizer_state_dict': discriminator_optimizer.state_dict(),
-                'best_mmd_overall': best_mmd_overall,
-                'best_epoch': best_epoch
-            }, checkpoint_path)
+            torch.save(
+                {
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'generator_optimizer_state_dict': generator_optimizer.state_dict(),
+                    'discriminator_optimizer_state_dict': discriminator_optimizer.state_dict(),
+                    'best_mmd_overall': best_mmd_overall,
+                    'best_epoch': best_epoch,
+                },
+                checkpoint_path,
+            )
             print(f"Model saved at epoch {epoch + 1}")
 
         # Evaluation and MMD calculation
-        # ... [Include your evaluation code here, same as before]
+        model.eval()
+        validation_songs = []
+        with torch.no_grad():
+            for i in range(len(validate)):
+                # Prepare conditioning data
+                if CONDITION:
+                    conditioning_data = validate[i, SONGLENGTH * NUM_MIDI_FEATURES :].reshape(
+                        1, SONGLENGTH, NUM_SYLLABLE_FEATURES
+                    )
+                    conditioning_data = torch.tensor(conditioning_data, dtype=torch.float32).to(device)
+                else:
+                    conditioning_data = None
+
+                # Generate song
+                generated_features = model.generate(1, conditioning_data, training=False)
+                sample = generated_features.cpu().numpy().squeeze(0)
+                discretized_sample = utils.discretize(sample)
+                discretized_sample = np.array(discretized_sample)
+                validation_songs.append(discretized_sample)
+
+            # Compute MMD
+            val_gen_pitches = np.array([song[:, 0] for song in validation_songs])
+            val_dat_pitches = validate[:, : NUM_MIDI_FEATURES * SONGLENGTH : NUM_MIDI_FEATURES]
+            MMD_pitch = mmd.Compute_MMD(val_gen_pitches, val_dat_pitches)
+            print("MMD pitch:", MMD_pitch)
+
+            val_gen_duration = np.array([song[:, 1] for song in validation_songs])
+            val_dat_duration = validate[:, 1 : NUM_MIDI_FEATURES * SONGLENGTH : NUM_MIDI_FEATURES]
+            MMD_duration = mmd.Compute_MMD(val_gen_duration, val_dat_duration)
+            print("MMD duration:", MMD_duration)
+
+            val_gen_rests = np.array([song[:, 2] for song in validation_songs])
+            val_dat_rests = validate[:, 2 : NUM_MIDI_FEATURES * SONGLENGTH : NUM_MIDI_FEATURES]
+            MMD_rest = mmd.Compute_MMD(val_gen_rests, val_dat_rests)
+            print("MMD rest:", MMD_rest)
+
+            MMD_overall = MMD_pitch + MMD_duration + MMD_rest
+            print("MMD overall:", MMD_overall)
+
+            # Save best model based on MMD overall
+            if MMD_overall < best_mmd_overall:
+                print(f"Best model at epoch {epoch + 1} with MMD overall: {MMD_overall:.5f}")
+                best_mmd_overall = MMD_overall
+                best_epoch = epoch + 1
+                torch.save(model.state_dict(), f"./saved_gan_models/best_model_{best_epoch}.pth")
+
+            # Compute metrics as per your request
+            midi_numbers_span_list = []
+            repetitions_3_list = []
+            repetitions_2_list = []
+            unique_midi_numbers_list = []
+            notes_without_rest_list = []
+            average_rest_value_list = []
+            song_length_list = []
+
+            # Validation loop for metrics computation
+            for i in range(len(validate)):
+                # Prepare conditioning data
+                if CONDITION:
+                    conditioning_data = validate[i, SONGLENGTH * NUM_MIDI_FEATURES :].reshape(
+                        1, SONGLENGTH, NUM_SYLLABLE_FEATURES
+                    )
+                    conditioning_data = torch.tensor(conditioning_data, dtype=torch.float32).to(device)
+                else:
+                    conditioning_data = None
+
+                # Generate song
+                generated_features = model.generate(1, conditioning_data, training=False)
+                sample = generated_features.cpu().numpy().squeeze(0)
+                discretized_sample = utils.discretize(sample)
+                discretized_sample = midi_statistics.tune_song(discretized_sample)
+                discretized_sample = np.array(discretized_sample)
+                validation_songs.append(discretized_sample)
+
+                # Compute metrics for the current song
+                midi_numbers = discretized_sample[:, 0]  # Assuming the first column is MIDI note numbers
+                rest_values = discretized_sample[:, 2]   # Assuming the third column is rest durations
+
+                # MIDI Numbers Span
+                midi_span = midi_numbers.max() - midi_numbers.min()
+                midi_numbers_span_list.append(midi_span)
+
+                # Repetitions of 3-MIDI numbers
+                repetitions_3 = midi_statistics.count_repetitions(midi_numbers, n=3)
+                repetitions_3_list.append(repetitions_3)
+
+                # Repetitions of 2-MIDI numbers
+                repetitions_2 = midi_statistics.count_repetitions(midi_numbers, n=2)
+                repetitions_2_list.append(repetitions_2)
+
+                # Number of Unique MIDI numbers
+                unique_midi_numbers = len(np.unique(midi_numbers))
+                unique_midi_numbers_list.append(unique_midi_numbers)
+
+                # Number of Notes Without Rest
+                notes_without_rest = np.sum(rest_values == 0)
+                notes_without_rest_list.append(notes_without_rest)
+
+                # Average Rest Value Within Song
+                average_rest = np.mean(rest_values)
+                average_rest_value_list.append(average_rest)
+
+                # Song Length
+                song_length = len(midi_numbers)
+                song_length_list.append(song_length)
+
+            # After processing all songs, compute the average metrics
+            avg_midi_span = np.mean(midi_numbers_span_list)
+            avg_repetitions_3 = np.mean(repetitions_3_list)
+            avg_repetitions_2 = np.mean(repetitions_2_list)
+            avg_unique_midi_numbers = np.mean(unique_midi_numbers_list)
+            avg_notes_without_rest = np.mean(notes_without_rest_list)
+            avg_average_rest_value = np.mean(average_rest_value_list)
+            avg_song_length = np.mean(song_length_list)
+
+            # Print the metrics
+            print(f"Average MIDI Numbers Span: {avg_midi_span:.1f}")
+            print(f"Average 3-MIDI Numbers Repetitions: {avg_repetitions_3:.1f}")
+            print(f"Average 2-MIDI Numbers Repetitions: {avg_repetitions_2:.1f}")
+            print(f"Average Number of Unique MIDI: {avg_unique_midi_numbers:.1f}")
+            print(f"Average Number of Notes Without Rest: {avg_notes_without_rest:.1f}")
+            print(f"Average Rest Value Within Song: {avg_average_rest_value:.1f}")
+            print(f"Average Song Length: {avg_song_length:.1f}")
 
     print(f"Best model at epoch {best_epoch} with MMD overall: {best_mmd_overall:.5f}")
 
