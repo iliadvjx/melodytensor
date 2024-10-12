@@ -18,12 +18,12 @@ DISABLE_FEED_PREVIOUS = True
 GAUSSIAN_NOISE = False
 UNIDIRECTIONAL_D = True
 BIDIRECTIONAL_G = False
-RANDOM_INPUT_SCALE = 10.0
+RANDOM_INPUT_SCALE = 8
 ATTENTION_LENGTH = 0
 FEED_COND_D = True
 DROPOUT_KEEP_PROB = 0.9
-D_LR_FACTOR = 0.3
-LEARNING_RATE = 0.1
+D_LR_FACTOR = 1
+LEARNING_RATE = 0.0001
 PRETRAINING_D = False
 LR_DECAY = 0.98
 DATA_MATRIX = "data/processed_dataset_matrices/full_data_matrix.npy"
@@ -39,25 +39,25 @@ PRETRAINING_EPOCHS = 1
 NUM_MIDI_FEATURES = 3
 NUM_SYLLABLE_FEATURES = 20
 NUM_SONGS = 5000000
-BATCH_SIZE = 1000
+BATCH_SIZE = 64
 REG_SCALE = 1.0
 TRAIN_RATE = 0.8
 VALIDATION_RATE = 0.1
-HIDDEN_SIZE_G = 400
-HIDDEN_SIZE_D = 400
-NUM_LAYERS_G = 2
-NUM_LAYERS_D = 2
+HIDDEN_SIZE_G = 512
+HIDDEN_SIZE_D = 512
+NUM_LAYERS_G = 6
+NUM_LAYERS_D = 6
 ADAM = False
 DISABLE_L2_REG = True
 MAX_GRAD_NORM = 5.0
 FEATURE_MATCHING = False
-MAX_EPOCH = 2
+MAX_EPOCH = 500
 EPOCHS_BEFORE_DECAY = 30
 SONGLENGTH_CEILING = 20
 
 # Set number of heads
-NUM_HEADS_G = 5
-NUM_HEADS_D = 4  # Adjusted to match the padded embed_dim
+NUM_HEADS_G = 8
+NUM_HEADS_D = 8  # Adjusted to match the padded embed_dim
 
 class TransformerGAN(nn.Module):
     def __init__(self, num_song_features, num_meta_features, songlength, conditioning='multi'):
@@ -68,9 +68,7 @@ class TransformerGAN(nn.Module):
         self.conditioning = conditioning
 
         # Generator
-        input_size_generator = int(RANDOM_INPUT_SCALE * num_song_features) + (
-            num_meta_features if conditioning == 'multi' else 0
-        )
+        input_size_generator = RANDOM_INPUT_SCALE + (num_meta_features if conditioning == 'multi' else 0)
         self.generator_input_dim = input_size_generator  # Should be divisible by NUM_HEADS_G
         self.generator_output_dim = num_song_features
 
@@ -82,11 +80,14 @@ class TransformerGAN(nn.Module):
                 d_model=self.generator_input_dim,
                 nhead=NUM_HEADS_G,
                 dim_feedforward=HIDDEN_SIZE_G,
-                dropout=1 - DROPOUT_KEEP_PROB,
+                dropout=DROPOUT_KEEP_PROB,
                 activation='relu',
+                layer_norm_eps=1e-6,
             ),
             num_layers=NUM_LAYERS_G,
+            norm=nn.LayerNorm(self.generator_input_dim, eps=1e-6),
         )
+
         self.generator_dense = nn.Linear(self.generator_input_dim, self.generator_output_dim)
 
         # Discriminator
@@ -198,26 +199,19 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        pe = torch.zeros(max_len, d_model).float()
-        pe.require_grad = False
-
-        position = torch.arange(0, max_len).float().unsqueeze(1)
-        div_term = (torch.arange(0, d_model, 2).float() * -(np.log(10000.0) / d_model)).exp()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
-        if d_model % 2 == 1:
-            pe[:, 1::2] = torch.cos(position * div_term[:-1])
-        else:
-            pe[:, 1::2] = torch.cos(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
 
-        pe = pe.unsqueeze(1)  # Shape: [max_len, 1, d_model]
+        pe = pe.unsqueeze(1)
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        """
-        x: [sequence_length, batch_size, d_model]
-        """
-        x = x + self.pe[:x.size(0)]
+        x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
+
 
 def train_step(model, song_data, conditioning_data, wrong_conditioning_data, batch_size, pretraining, generator_optimizer, discriminator_optimizer):
     device = next(model.parameters()).device
