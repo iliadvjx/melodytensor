@@ -24,7 +24,7 @@ FEED_COND_D = True
 RANDOM_INPUT_DIM = 100  # Adjusted to make the input dimension divisible by NUM_HEADS_G
 DROPOUT_KEEP_PROB = 0.1
 D_LR_FACTOR = 1
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 PRETRAINING_D = False
 LR_DECAY = 0.98
 DATA_MATRIX = "data/processed_dataset_matrices/full_data_matrix.npy"
@@ -40,18 +40,18 @@ PRETRAINING_EPOCHS = 1
 NUM_MIDI_FEATURES = 3
 NUM_SYLLABLE_FEATURES = 20
 NUM_SONGS = 5000000
-BATCH_SIZE = 1000
+BATCH_SIZE = 128
 REG_SCALE = 1.0
 TRAIN_RATE = 0.8
 VALIDATION_RATE = 0.1
-HIDDEN_SIZE_G = 256
+HIDDEN_SIZE_G = 512
 HIDDEN_SIZE_D = 256
-NUM_LAYERS_G = 4
+NUM_LAYERS_G = 6
 NUM_LAYERS_D = 4
 ADAM = True
 DISABLE_L2_REG = True
 MAX_GRAD_NORM = 5.0
-FEATURE_MATCHING = False
+FEATURE_MATCHING = True
 MAX_EPOCH = 500
 EPOCHS_BEFORE_DECAY = 30
 SONGLENGTH_CEILING = 20
@@ -173,7 +173,7 @@ class TransformerGAN(nn.Module):
         return self.bce_loss(fake_output, target)
 
     def discriminator_loss(self, real_output, fake_output, wrong_output=None):
-        real_target = torch.ones_like(real_output)
+        real_target =  torch.full_like(real_output, 0.9)
         fake_target = torch.zeros_like(fake_output)
 
         real_loss = self.bce_loss(real_output, real_target)
@@ -319,8 +319,8 @@ def main():
 
     # Set up optimizers
     if ADAM:
-        generator_optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-        discriminator_optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE * D_LR_FACTOR)
+        generator_optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(0.9, 0.999), weight_decay=1e-5)
+        discriminator_optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE * D_LR_FACTOR, betas=(0.9, 0.999), weight_decay=1e-5)
     else:
         generator_optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
         discriminator_optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE * D_LR_FACTOR)
