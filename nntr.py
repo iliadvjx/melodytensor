@@ -21,7 +21,8 @@ BIDIRECTIONAL_G = False
 RANDOM_INPUT_SCALE = 44  
 ATTENTION_LENGTH = 0
 FEED_COND_D = True
-DROPOUT_KEEP_PROB = 0.9
+RANDOM_INPUT_DIM = 100  # Adjusted to make the input dimension divisible by NUM_HEADS_G
+DROPOUT_KEEP_PROB = 0.1
 D_LR_FACTOR = 1
 LEARNING_RATE = 0.0001
 PRETRAINING_D = False
@@ -43,10 +44,10 @@ BATCH_SIZE = 64
 REG_SCALE = 1.0
 TRAIN_RATE = 0.8
 VALIDATION_RATE = 0.1
-HIDDEN_SIZE_G = 512
-HIDDEN_SIZE_D = 512
-NUM_LAYERS_G = 6
-NUM_LAYERS_D = 6
+HIDDEN_SIZE_G = 256
+HIDDEN_SIZE_D = 256
+NUM_LAYERS_G = 4
+NUM_LAYERS_D = 4
 ADAM = False
 DISABLE_L2_REG = True
 MAX_GRAD_NORM = 5.0
@@ -68,12 +69,13 @@ class TransformerGAN(nn.Module):
         self.conditioning = conditioning
 
         # Generator
-        input_size_generator = RANDOM_INPUT_SCALE + (num_meta_features if conditioning == 'multi' else 0)
-        self.generator_input_dim = input_size_generator  # Should be divisible by NUM_HEADS_G
-        self.generator_output_dim = num_song_features
+        self.generator_input_dim = RANDOM_INPUT_DIM + (
+            num_meta_features if conditioning == 'multi' else 0
+        )
+        assert self.generator_input_dim % NUM_HEADS_G == 0, "Generator input dim must be divisible by NUM_HEADS_G"
 
         self.generator_positional_encoding = PositionalEncoding(
-            self.generator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength
+            self.generator_input_dim, dropout=DROPOUT_KEEP_PROB, max_len=songlength
         )
         self.generator_transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
@@ -82,48 +84,44 @@ class TransformerGAN(nn.Module):
                 dim_feedforward=HIDDEN_SIZE_G,
                 dropout=DROPOUT_KEEP_PROB,
                 activation='relu',
-                layer_norm_eps=1e-6,
             ),
             num_layers=NUM_LAYERS_G,
-            norm=nn.LayerNorm(self.generator_input_dim, eps=1e-6),
         )
-
-        self.generator_dense = nn.Linear(self.generator_input_dim, self.generator_output_dim)
+        self.generator_dense = nn.Linear(self.generator_input_dim, self.num_song_features)
 
         # Discriminator
         input_size_discriminator = num_song_features + (
             num_meta_features if conditioning == 'multi' and FEED_COND_D else 0
         )
-        desired_embed_dim = 24  # Must be divisible by NUM_HEADS_D
+        desired_embed_dim = ((input_size_discriminator + NUM_HEADS_D - 1) // NUM_HEADS_D) * NUM_HEADS_D
         self.discriminator_padding_dim = desired_embed_dim - input_size_discriminator
         self.discriminator_input_dim = desired_embed_dim
-        self.discriminator_output_dim = 1
+        assert self.discriminator_input_dim % NUM_HEADS_D == 0, "Discriminator input dim must be divisible by NUM_HEADS_D"
 
         self.discriminator_positional_encoding = PositionalEncoding(
-            self.discriminator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength
+            self.discriminator_input_dim, dropout=DROPOUT_KEEP_PROB, max_len=songlength
         )
         self.discriminator_transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=self.discriminator_input_dim,
                 nhead=NUM_HEADS_D,
                 dim_feedforward=HIDDEN_SIZE_D,
-                dropout=1 - DROPOUT_KEEP_PROB,
+                dropout=DROPOUT_KEEP_PROB,
                 activation='relu',
             ),
             num_layers=NUM_LAYERS_D,
         )
-        self.discriminator_dense = nn.Linear(self.discriminator_input_dim, self.discriminator_output_dim)
+        self.discriminator_dense = nn.Linear(self.discriminator_input_dim, 1)
         self.discriminator_sigmoid = nn.Sigmoid()
 
         # Loss functions
         self.bce_loss = nn.BCELoss()
         self.mse_loss = nn.MSELoss()
-
     def generate(self, batch_size, conditioning_data=None, training=True):
         device = next(self.parameters()).device
         random_input = torch.rand(
-            (batch_size, self.songlength, int(RANDOM_INPUT_SCALE * self.num_song_features)),
-            device=device,
+            (batch_size, self.songlength, RANDOM_INPUT_DIM),
+            device=device
         )
 
         if self.conditioning == 'multi' and conditioning_data is not None:
@@ -132,17 +130,15 @@ class TransformerGAN(nn.Module):
             generator_input = random_input
 
         # Apply positional encoding
-        generator_input = self.generator_positional_encoding(
-            generator_input.permute(1, 0, 2)
-        )  # Shape: [sequence_length, batch_size, input_dim]
+        generator_input = generator_input.permute(1, 0, 2)  # Shape: [sequence_length, batch_size, input_dim]
+        generator_input = self.generator_positional_encoding(generator_input)
 
-        gen_output = self.generator_transformer(generator_input)  # Shape: [sequence_length, batch_size, input_dim]
+        gen_output = self.generator_transformer(generator_input)
 
-        gen_output = gen_output.permute(1, 0, 2)  # Shape: [batch_size, sequence_length, input_dim]
-        generated_features = self.generator_dense(gen_output)  # Shape: [batch_size, sequence_length, num_song_features]
+        gen_output = gen_output.permute(1, 0, 2)
+        generated_features = self.generator_dense(gen_output)
 
         return generated_features
-
     def discriminate(self, song_data, conditioning_data=None, training=True):
         device = next(self.parameters()).device
 
@@ -155,14 +151,13 @@ class TransformerGAN(nn.Module):
         if self.discriminator_padding_dim > 0:
             padding = torch.zeros(
                 (discriminator_input.size(0), discriminator_input.size(1), self.discriminator_padding_dim),
-                device=discriminator_input.device,
+                device=discriminator_input.device
             )
             discriminator_input = torch.cat([discriminator_input, padding], dim=-1)
 
         # Apply positional encoding
-        discriminator_input = self.discriminator_positional_encoding(
-            discriminator_input.permute(1, 0, 2)
-        )
+        discriminator_input = discriminator_input.permute(1, 0, 2)
+        discriminator_input = self.discriminator_positional_encoding(discriminator_input)
 
         disc_output = self.discriminator_transformer(discriminator_input)
 
@@ -174,25 +169,6 @@ class TransformerGAN(nn.Module):
         decision = decision.mean(dim=1).squeeze()
         return decision
 
-    def generator_loss(self, fake_output):
-        target = torch.ones_like(fake_output)
-        return self.bce_loss(fake_output, target)
-
-    def discriminator_loss(self, real_output, fake_output, wrong_output=None):
-        real_target = torch.ones_like(real_output)
-        fake_target = torch.zeros_like(fake_output)
-
-        real_loss = self.bce_loss(real_output, real_target)
-        fake_loss = self.bce_loss(fake_output, fake_target)
-
-        if wrong_output is not None and LOSS_WRONG_D:
-            wrong_target = torch.zeros_like(wrong_output)
-            wrong_loss = self.bce_loss(wrong_output, wrong_target)
-            total_loss = real_loss + fake_loss + wrong_loss
-        else:
-            total_loss = real_loss + fake_loss
-
-        return total_loss
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
