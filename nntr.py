@@ -57,7 +57,7 @@ SONGLENGTH_CEILING = 20
 
 # Set number of heads to 5 to ensure divisibility
 NUM_HEADS_G = 5
-NUM_HEADS_D = 5
+NUM_HEADS_D = 4
 
 class TransformerGAN(nn.Module):
     def __init__(self, num_song_features, num_meta_features, songlength, conditioning='multi'):
@@ -86,11 +86,17 @@ class TransformerGAN(nn.Module):
         self.generator_dense = nn.Linear(self.generator_input_dim, self.generator_output_dim)
 
         # Discriminator
-        input_size_discriminator = num_song_features + (num_meta_features if conditioning == 'multi' and FEED_COND_D else 0)
-        self.discriminator_input_dim = input_size_discriminator  # Should be divisible by NUM_HEADS_D
+        input_size_discriminator = num_song_features + (
+            num_meta_features if conditioning == 'multi' and FEED_COND_D else 0
+        )
+        desired_embed_dim = 24  # Desired dimension divisible by NUM_HEADS_D
+        self.discriminator_padding_dim = desired_embed_dim - input_size_discriminator
+        self.discriminator_input_dim = desired_embed_dim  # Now 24
         self.discriminator_output_dim = 1
 
-        self.discriminator_positional_encoding = PositionalEncoding(self.discriminator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength)
+        self.discriminator_positional_encoding = PositionalEncoding(
+            self.discriminator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength
+        )
         self.discriminator_transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=self.discriminator_input_dim,
@@ -138,17 +144,29 @@ class TransformerGAN(nn.Module):
         else:
             discriminator_input = song_data
 
+        # Pad discriminator_input if necessary
+        if self.discriminator_padding_dim > 0:
+            padding = torch.zeros(
+                (discriminator_input.size(0), discriminator_input.size(1), self.discriminator_padding_dim),
+                device=discriminator_input.device
+            )
+            discriminator_input = torch.cat([discriminator_input, padding], dim=-1)
+
         # Apply positional encoding
-        discriminator_input = self.discriminator_positional_encoding(discriminator_input.permute(1, 0, 2))  # Shape: [sequence_length, batch_size, input_dim]
+        discriminator_input = self.discriminator_positional_encoding(
+            discriminator_input.permute(1, 0, 2)
+        )
 
-        disc_output = self.discriminator_transformer(discriminator_input)  # Shape: [sequence_length, batch_size, input_dim]
+        # Transformer processing
+        disc_output = self.discriminator_transformer(discriminator_input)
 
-        disc_output = disc_output.permute(1, 0, 2)  # Shape: [batch_size, sequence_length, input_dim]
-        decision = self.discriminator_dense(disc_output)  # Shape: [batch_size, sequence_length, 1]
+        # Continue as before
+        disc_output = disc_output.permute(1, 0, 2)
+        decision = self.discriminator_dense(disc_output)
         decision = self.discriminator_sigmoid(decision)
 
         # Average over time dimension
-        decision = decision.mean(dim=1).squeeze()  # Shape: [batch_size]
+        decision = decision.mean(dim=1).squeeze()
         return decision
 
     def generator_loss(self, fake_output):
