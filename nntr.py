@@ -54,8 +54,8 @@ FEATURE_MATCHING = False
 MAX_EPOCH = 400
 EPOCHS_BEFORE_DECAY = 30
 SONGLENGTH_CEILING = 20
-NUM_HEADS_G = 8
-NUM_HEADS_D = 8
+NUM_HEADS_G = 5
+NUM_HEADS_D = 5
 
 class TransformerGAN(nn.Module):
     def __init__(self, num_song_features, num_meta_features, songlength, conditioning='multi'):
