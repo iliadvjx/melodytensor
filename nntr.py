@@ -39,7 +39,7 @@ PRETRAINING_EPOCHS = 1
 NUM_MIDI_FEATURES = 3
 NUM_SYLLABLE_FEATURES = 20
 NUM_SONGS = 5000000
-BATCH_SIZE = 400
+BATCH_SIZE = 300
 REG_SCALE = 1.0
 TRAIN_RATE = 0.8
 VALIDATION_RATE = 0.1
@@ -54,6 +54,8 @@ FEATURE_MATCHING = False
 MAX_EPOCH = 400
 EPOCHS_BEFORE_DECAY = 30
 SONGLENGTH_CEILING = 20
+
+# Set number of heads to 5 to ensure divisibility
 NUM_HEADS_G = 5
 NUM_HEADS_D = 5
 
@@ -67,7 +69,7 @@ class TransformerGAN(nn.Module):
 
         # Generator
         input_size_generator = int(RANDOM_INPUT_SCALE * num_song_features) + (num_meta_features if conditioning == 'multi' else 0)
-        self.generator_input_dim = input_size_generator
+        self.generator_input_dim = input_size_generator  # Should be divisible by NUM_HEADS_G
         self.generator_output_dim = num_song_features
 
         self.generator_positional_encoding = PositionalEncoding(self.generator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength)
@@ -85,7 +87,7 @@ class TransformerGAN(nn.Module):
 
         # Discriminator
         input_size_discriminator = num_song_features + (num_meta_features if conditioning == 'multi' and FEED_COND_D else 0)
-        self.discriminator_input_dim = input_size_discriminator
+        self.discriminator_input_dim = input_size_discriminator  # Should be divisible by NUM_HEADS_D
         self.discriminator_output_dim = 1
 
         self.discriminator_positional_encoding = PositionalEncoding(self.discriminator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength)
@@ -194,6 +196,7 @@ class PositionalEncoding(nn.Module):
         """
         x = x + self.pe[:x.size(0)]
         return self.dropout(x)
+
 
 # The rest of the code remains largely the same, except that you should replace instances of RNNGAN with TransformerGAN
 
