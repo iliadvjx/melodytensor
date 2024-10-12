@@ -37,7 +37,7 @@ PRETRAINING_EPOCHS = 1
 NUM_MIDI_FEATURES = 3
 NUM_SYLLABLE_FEATURES = 20
 NUM_SONGS = 5000000
-BATCH_SIZE = 256
+BATCH_SIZE = 1000
 REG_SCALE = 1.0
 TRAIN_RATE = 0.8
 VALIDATION_RATE = 0.1
@@ -264,6 +264,86 @@ def train_model(dataset, model, epochs, train_data, validate_data, test_data):
 
         MMD_overall = MMD_pitch + MMD_duration + MMD_rest
         print("MMD overall:", MMD_overall)
+        # ... [کدهای قبلی شما]
+
+# مقداردهی اولیه لیست‌ها برای ذخیره معیارها
+        midi_numbers_span_list = []
+        repetitions_3_list = []
+        repetitions_2_list = []
+        unique_midi_numbers_list = []
+        notes_without_rest_list = []
+        average_rest_value_list = []
+        song_length_list = []
+
+# حلقه ارزیابی
+        print("EVAL..")
+        validation_songs = []
+        for i in range(len(validate_data)):
+            song_data = np.random.uniform(size=(1, SONGLENGTH, NUM_MIDI_FEATURES)).astype(np.float32)
+            if CONDITION:
+                conditioning_data = validate_data[i, SONGLENGTH * NUM_MIDI_FEATURES:].reshape(1, SONGLENGTH, NUM_SYLLABLE_FEATURES)
+                conditioning_data = tf.convert_to_tensor(conditioning_data, dtype=tf.float32)
+            else:
+                conditioning_data = None
+
+            generated_features = model.generate(1, conditioning_data, training=False)
+            sample = generated_features.numpy().squeeze(axis=0)  # شکل: [SONGLENGTH, NUM_MIDI_FEATURES]
+            discretized_sample = utils.discretize(sample)
+            discretized_sample = midi_statistics.tune_song(discretized_sample)
+            discretized_sample = np.array(discretized_sample)
+            validation_songs.append(discretized_sample)
+
+            # محاسبه معیارها برای ملودی تولیدشده
+            midi_numbers = discretized_sample[:, 0]  # فرض بر این است که ستون اول شماره نت‌های MIDI است
+            rest_values = discretized_sample[:, 2]   # فرض بر این است که ستون سوم مقادیر سکوت است
+
+            # بازه شماره نت‌های MIDI
+            midi_span = midi_numbers.max() - midi_numbers.min()
+            midi_numbers_span_list.append(midi_span)
+
+            # تعداد تکرارهای ۳ نتی
+            repetitions_3 = midi_statistics.count_repetitions(midi_numbers, n=3)
+            repetitions_3_list.append(repetitions_3)
+
+            # تعداد تکرارهای ۲ نتی
+            repetitions_2 = midi_statistics.count_repetitions(midi_numbers, n=2)
+            repetitions_2_list.append(repetitions_2)
+
+            # تعداد نت‌های MIDI منحصربه‌فرد
+            unique_midi_numbers = len(np.unique(midi_numbers))
+            unique_midi_numbers_list.append(unique_midi_numbers)
+
+            # تعداد نت‌های بدون سکوت
+            notes_without_rest = np.sum(rest_values == 0)
+            notes_without_rest_list.append(notes_without_rest)
+
+            # میانگین مقدار سکوت در ملودی
+            average_rest = np.mean(rest_values)
+            average_rest_value_list.append(average_rest)
+
+            # طول ملودی
+            song_length = len(midi_numbers)
+            song_length_list.append(song_length)
+
+        # پس از پردازش همه ملودی‌ها، میانگین معیارها را محاسبه کنید
+        avg_midi_span = np.mean(midi_numbers_span_list)
+        avg_repetitions_3 = np.mean(repetitions_3_list)
+        avg_repetitions_2 = np.mean(repetitions_2_list)
+        avg_unique_midi_numbers = np.mean(unique_midi_numbers_list)
+        avg_notes_without_rest = np.mean(notes_without_rest_list)
+        avg_average_rest_value = np.mean(average_rest_value_list)
+        avg_song_length = np.mean(song_length_list)
+
+        # نمایش معیارها
+        print(f"Average MIDI Numbers Span: {avg_midi_span:.1f}")
+        print(f"Average 3-MIDI Numbers Repetitions: {avg_repetitions_3:.1f}")
+        print(f"Average 2-MIDI Numbers Repetitions: {avg_repetitions_2:.1f}")
+        print(f"Average Number of Unique MIDI: {avg_unique_midi_numbers:.1f}")
+        print(f"Average Number of Notes Without Rest: {avg_notes_without_rest:.1f}")
+        print(f"Average Rest Value Within Song: {avg_average_rest_value:.1f}")
+        print(f"Average Song Length: {avg_song_length:.1f}")
+
+        # ... [ادامه کدهای شما]
 
         # ذخیره بهترین مدل بر اساس MMD overall
         if MMD_overall < best_mmd_overall:
