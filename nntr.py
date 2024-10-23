@@ -103,13 +103,13 @@ class TransformerGAN(nn.Module):
         self.test = True
 
         # Constants (adjust as needed)
-        RANDOM_INPUT_DIM = 50
+        RANDOM_INPUT_DIM = 100
         NUM_HEADS_G = 8
         HIDDEN_SIZE_G = 512
-        NUM_LAYERS_G = 4
+        NUM_LAYERS_G = 8
         NUM_HEADS_D = 8
-        HIDDEN_SIZE_D = 512
-        NUM_LAYERS_D = 4
+        HIDDEN_SIZE_D = 256
+        NUM_LAYERS_D = 8
         DROPOUT_KEEP_PROB = 0.9
         DROPOUT_PROB = 1 - DROPOUT_KEEP_PROB
         FEED_COND_D = True
