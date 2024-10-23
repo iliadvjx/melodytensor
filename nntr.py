@@ -485,7 +485,7 @@ def main():
                 discretized_sample = midi_statistics.tune_song(discretized_sample)
                 discretized_sample = np.array(discretized_sample)
                 validation_songs.append(discretized_sample)
-
+                print("SAMPLE: ",sample)
                 # Compute metrics for the current song
                 midi_numbers = discretized_sample[:, 0]  # Assuming the first column is MIDI note numbers
                 rest_values = discretized_sample[:, 2]   # Assuming the third column is rest durations
@@ -503,7 +503,8 @@ def main():
                 repetitions_2_list.append(repetitions_2)
 
                 # Number of Unique MIDI numbers
-                unique_midi_numbers = len(np.unique(midi_numbers))
+                # unique_midi_numbers = len(np.unique(midi_numbers))
+                unique_midi_numbers =  midi_statistics.count_repetitions(midi_numbers, n=1)
                 unique_midi_numbers_list.append(unique_midi_numbers)
 
                 # Number of Notes Without Rest
