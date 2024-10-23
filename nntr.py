@@ -93,7 +93,6 @@ class PositionalEncoding(nn.Module):
         # x shape: [sequence_length, batch_size, embedding_dim]
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
-
 class TransformerGAN(nn.Module):
     def __init__(self, num_song_features, num_meta_features, songlength, conditioning='multi'):
         super(TransformerGAN, self).__init__()
@@ -101,7 +100,19 @@ class TransformerGAN(nn.Module):
         self.num_song_features = num_song_features
         self.num_meta_features = num_meta_features
         self.conditioning = conditioning
-        self.test = True  # For debugging purposes
+        self.test = True
+
+        # Constants (adjust as needed)
+        RANDOM_INPUT_DIM = 50
+        NUM_HEADS_G = 8
+        HIDDEN_SIZE_G = 512
+        NUM_LAYERS_G = 4
+        NUM_HEADS_D = 8
+        HIDDEN_SIZE_D = 512
+        NUM_LAYERS_D = 4
+        DROPOUT_KEEP_PROB = 0.9
+        DROPOUT_PROB = 1 - DROPOUT_KEEP_PROB
+        FEED_COND_D = True
 
         # Generator
         self.generator_input_dim = RANDOM_INPUT_DIM + (
@@ -110,15 +121,16 @@ class TransformerGAN(nn.Module):
         assert self.generator_input_dim % NUM_HEADS_G == 0, "Generator input dim must be divisible by NUM_HEADS_G"
 
         self.generator_positional_encoding = PositionalEncoding(
-            self.generator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength
+            self.generator_input_dim, dropout=DROPOUT_PROB, max_len=songlength
         )
         self.generator_transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=self.generator_input_dim,
                 nhead=NUM_HEADS_G,
                 dim_feedforward=HIDDEN_SIZE_G,
-                dropout=1 - DROPOUT_KEEP_PROB,
+                dropout=DROPOUT_PROB,
                 activation='relu',
+                batch_first=True
             ),
             num_layers=NUM_LAYERS_G,
         )
@@ -128,22 +140,22 @@ class TransformerGAN(nn.Module):
         input_size_discriminator = num_song_features + (
             num_meta_features if conditioning == 'multi' and FEED_COND_D else 0
         )
-        # Adjust discriminator input dimension to be divisible by NUM_HEADS_D
         desired_embed_dim = ((input_size_discriminator + NUM_HEADS_D - 1) // NUM_HEADS_D) * NUM_HEADS_D
         self.discriminator_padding_dim = desired_embed_dim - input_size_discriminator
         self.discriminator_input_dim = desired_embed_dim
         assert self.discriminator_input_dim % NUM_HEADS_D == 0, "Discriminator input dim must be divisible by NUM_HEADS_D"
 
         self.discriminator_positional_encoding = PositionalEncoding(
-            self.discriminator_input_dim, dropout=1 - DROPOUT_KEEP_PROB, max_len=songlength
+            self.discriminator_input_dim, dropout=DROPOUT_PROB, max_len=songlength
         )
         self.discriminator_transformer = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
                 d_model=self.discriminator_input_dim,
                 nhead=NUM_HEADS_D,
                 dim_feedforward=HIDDEN_SIZE_D,
-                dropout=1 - DROPOUT_KEEP_PROB,
+                dropout=DROPOUT_PROB,
                 activation='relu',
+                batch_first=True
             ),
             num_layers=NUM_LAYERS_D,
         )
@@ -167,18 +179,19 @@ class TransformerGAN(nn.Module):
             generator_input = random_input
 
         # Apply positional encoding
-        generator_input = generator_input.permute(1, 0, 2)  # Shape: [sequence_length, batch_size, input_dim]
         generator_input = self.generator_positional_encoding(generator_input)
 
         gen_output = self.generator_transformer(generator_input)
 
-        gen_output = gen_output.permute(1, 0, 2)  # Shape: [batch_size, sequence_length, input_dim]
         if self.test:
             print(f"Generator output shape: {gen_output.shape}")
             print(f"Generator input shape: {generator_input.shape}")
             self.test = False
 
         generated_features = self.generator_dense(gen_output)
+
+        # Add activation function
+        generated_features = torch.sigmoid(generated_features)
 
         return generated_features
 
@@ -199,12 +212,10 @@ class TransformerGAN(nn.Module):
             discriminator_input = torch.cat([discriminator_input, padding], dim=-1)
 
         # Apply positional encoding
-        discriminator_input = discriminator_input.permute(1, 0, 2)  # Shape: [sequence_length, batch_size, input_dim]
         discriminator_input = self.discriminator_positional_encoding(discriminator_input)
 
         disc_output = self.discriminator_transformer(discriminator_input)
 
-        disc_output = disc_output.permute(1, 0, 2)  # Shape: [batch_size, sequence_length, input_dim]
         decision = self.discriminator_dense(disc_output)
         decision = self.discriminator_sigmoid(decision)
 
@@ -223,14 +234,10 @@ class TransformerGAN(nn.Module):
         real_loss = self.bce_loss(real_output, real_target)
         fake_loss = self.bce_loss(fake_output, fake_target)
 
-        if wrong_output is not None and LOSS_WRONG_D:
-            wrong_target = torch.zeros_like(wrong_output)
-            wrong_loss = self.bce_loss(wrong_output, wrong_target)
-            total_loss = real_loss + fake_loss + wrong_loss
-        else:
-            total_loss = real_loss + fake_loss
+        total_loss = real_loss + fake_loss
 
         return total_loss
+
     
 def train_step(model, song_data, conditioning_data, wrong_conditioning_data, batch_size, pretraining, generator_optimizer, discriminator_optimizer):
     device = next(model.parameters()).device
