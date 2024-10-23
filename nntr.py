@@ -65,12 +65,9 @@ import torch.nn as nn
 import numpy as np
 
 # Constants (define these according to your needs)
-RANDOM_INPUT_DIM = 50    # Dimension of random input noise
-NUM_HEADS_G = 8          # Number of attention heads in the generator
-HIDDEN_SIZE_G = 2048     # Feedforward network dimension in the generator
-NUM_LAYERS_G = 6         # Number of Transformer layers in the generator
-NUM_HEADS_D = 8          # Number of attention heads in the discriminator
-HIDDEN_SIZE_D = 2048     # Feedforward network dimension in the discriminator
+   # Feedforward network dimension in the generator
+NUM_LAYERS_G = 6         # Number of Transformer layers in the generator         # Number of attention heads in the discriminator
+HIDDEN_SIZE_D = 256     # Feedforward network dimension in the discriminator
 NUM_LAYERS_D = 6         # Number of Transformer layers in the discriminator
 DROPOUT_KEEP_PROB = 0.9  # Keep probability for dropout (1 - dropout rate)
 FEED_COND_D = True       # Whether to feed conditioning data into the discriminator
