@@ -130,7 +130,7 @@ class TransformerGAN(nn.Module):
             generator_input = random_input
 
         # Apply positional encoding
-        generator_input = generator_input.permute(1, 0, 2)  # Shape: [sequence_length, batch_size, input_dim]
+        generator_input = generator_input.permute(1, 0, 2)  # Shape: [sequence_length, batch_size, input_dim]............
         generator_input = self.generator_positional_encoding(generator_input)
 
         gen_output = self.generator_transformer(generator_input)
