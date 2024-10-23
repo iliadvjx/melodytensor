@@ -91,7 +91,7 @@ class RNNGAN(nn.Module):
         # Transformer parameters
         self.num_heads = 8  # You can adjust this
         self.dropout = 1 - DROPOUT_KEEP_PROB
-
+        self.generator_dropout = nn.Dropout(p=1 - DROPOUT_KEEP_PROB)
         # Generator layers
         input_size_generator = int(RANDOM_INPUT_SCALE * num_song_features) + (num_meta_features if conditioning == 'multi' else 0)
         self.generator_input_linear = nn.Linear(input_size_generator, HIDDEN_SIZE_G)
@@ -140,7 +140,9 @@ class RNNGAN(nn.Module):
             generator_input = torch.cat([random_input, conditioning_data], dim=-1)
         else:
             generator_input = random_input
-
+        
+        if training and DROPOUT_KEEP_PROB < 1.0:
+            generator_input = self.generator_dropout(generator_input)
         # Project input to model dimension
         generator_input = self.generator_input_linear(generator_input)
         generator_input = generator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
