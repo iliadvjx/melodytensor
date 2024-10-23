@@ -210,7 +210,6 @@ class RNNGAN(nn.Module):
             total_loss = real_loss + fake_loss
 
         return total_loss
-    
 def train_step(model, song_data, conditioning_data, wrong_conditioning_data, batch_size, pretraining, generator_optimizer, discriminator_optimizer):
     device = next(model.parameters()).device
     model.train()
@@ -220,7 +219,7 @@ def train_step(model, song_data, conditioning_data, wrong_conditioning_data, bat
     if wrong_conditioning_data is not None:
         wrong_conditioning_data = wrong_conditioning_data.to(device)
 
-    # Zero gradients
+    # صفر کردن گرادیان‌ها
     generator_optimizer.zero_grad()
     if not pretraining:
         discriminator_optimizer.zero_grad()
@@ -230,8 +229,9 @@ def train_step(model, song_data, conditioning_data, wrong_conditioning_data, bat
     if pretraining:
         gen_loss = model.mse_loss(generated_songs, song_data)
         gen_loss.backward()
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+        # کلیپینگ گرادیان
+        torch.nn.utils.clip_grad_norm_(model.generator_lstm.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.generator_dense.parameters(), MAX_GRAD_NORM)
         generator_optimizer.step()
         disc_loss = None
     else:
@@ -244,24 +244,26 @@ def train_step(model, song_data, conditioning_data, wrong_conditioning_data, bat
 
         disc_loss = model.discriminator_loss(real_output, fake_output, wrong_output)
         disc_loss.backward()
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+        # کلیپینگ گرادیان
+        torch.nn.utils.clip_grad_norm_(model.discriminator_lstm.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.discriminator_dense.parameters(), MAX_GRAD_NORM)
         discriminator_optimizer.step()
 
-        # Update Generator
+        # به‌روزرسانی Generator
         generator_optimizer.zero_grad()
         generated_songs = model.generate(batch_size, conditioning_data, training=True)
         fake_output = model.discriminate(generated_songs, conditioning_data)
         gen_loss = model.generator_loss(fake_output)
         gen_loss.backward()
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
+        # کلیپینگ گرادیان
+        torch.nn.utils.clip_grad_norm_(model.generator_lstm.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.generator_dense.parameters(), MAX_GRAD_NORM)
         generator_optimizer.step()
 
     return gen_loss.item(), disc_loss.item() if disc_loss is not None else None
 
 def main():
-    # Load data
+    # بارگذاری داده‌ها
     train = np.load(TRAIN_DATA_MATRIX)
     validate = np.load(VALIDATE_DATA_MATRIX)
     test = np.load(TEST_DATA_MATRIX)
@@ -275,7 +277,7 @@ def main():
     print("Validation set: ", validate.shape[0], " songs")
     print("Test set: ", test.shape[0], " songs")
 
-    # Create dataset using torch.utils.data.Dataset and DataLoader
+    # ایجاد dataset با استفاده از torch.utils.data.Dataset و DataLoader
     if CONDITION:
         class MusicDataset(torch.utils.data.Dataset):
             def __init__(self, data):
@@ -288,11 +290,10 @@ def main():
             def __getitem__(self, idx):
                 song = self.song_data[idx].astype(np.float32)
                 condition = self.conditioning_data[idx].astype(np.float32)
-                # Create wrong conditioning data
+                # ایجاد داده‌های شرطی نادرست
                 wrong_idx = np.random.randint(len(self.song_data))
                 wrong_condition = self.conditioning_data[wrong_idx].astype(np.float32)
                 return song, condition, wrong_condition
-
         dataset = MusicDataset(train)
     else:
         class MusicDataset(torch.utils.data.Dataset):
@@ -305,31 +306,25 @@ def main():
             def __getitem__(self, idx):
                 song = self.song_data[idx].astype(np.float32)
                 return song
-
         dataset = MusicDataset(train)
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
 
-    # Initialize model
+    # مقداردهی اولیه مدل
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("RUN ON ", device)
-    model = RNNGAN(
-        num_song_features=NUM_MIDI_FEATURES,
-        num_meta_features=NUM_SYLLABLE_FEATURES,
-        songlength=SONGLENGTH,
-        conditioning='multi',
-    )
+    model = RNNGAN(num_song_features=NUM_MIDI_FEATURES, num_meta_features=NUM_SYLLABLE_FEATURES, songlength=SONGLENGTH, conditioning='multi')
     model.to(device)
 
-    # Set up optimizers
+    # تنظیم بهینه‌سازها
     if ADAM:
-        generator_optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, betas=(0.9, 0.999), weight_decay=1e-5)
-        discriminator_optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE * D_LR_FACTOR, betas=(0.9, 0.999), weight_decay=1e-5)
+        generator_optimizer = optim.Adam(list(model.generator_lstm.parameters()) + list(model.generator_dense.parameters()), lr=LEARNING_RATE)
+        discriminator_optimizer = optim.Adam(list(model.discriminator_lstm.parameters()) + list(model.discriminator_dense.parameters()), lr=LEARNING_RATE * D_LR_FACTOR)
     else:
-        generator_optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
-        discriminator_optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE * D_LR_FACTOR)
+        generator_optimizer = optim.SGD(list(model.generator_lstm.parameters()) + list(model.generator_dense.parameters()), lr=LEARNING_RATE)
+        discriminator_optimizer = optim.SGD(list(model.discriminator_lstm.parameters()) + list(model.discriminator_dense.parameters()), lr=LEARNING_RATE * D_LR_FACTOR)
 
-    # Learning rate schedulers
+    # تنظیم برنامه‌ریزی نرخ یادگیری
     def lr_lambda(epoch):
         if epoch < EPOCHS_BEFORE_DECAY:
             return 1.0
@@ -339,7 +334,7 @@ def main():
     generator_scheduler = optim.lr_scheduler.LambdaLR(generator_optimizer, lr_lambda=lr_lambda)
     discriminator_scheduler = optim.lr_scheduler.LambdaLR(discriminator_optimizer, lr_lambda=lr_lambda)
 
-    # Load checkpoint if exists
+    # بارگذاری چک‌پوینت در صورت وجود
     checkpoint_dir = './training_checkpoints'
     os.makedirs(checkpoint_dir, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_dir, 'model_checkpoint.pth')
@@ -354,18 +349,18 @@ def main():
         start_epoch = checkpoint['epoch'] + 1
         best_mmd_overall = checkpoint['best_mmd_overall']
         best_epoch = checkpoint['best_epoch']
-        print(f"Loaded model from checkpoint at epoch {start_epoch}")
+        print(f"مدل از چک‌پوینت دوره {start_epoch} بارگذاری شد.")
 
-    # Main training loop
+    # حلقه اصلی آموزش
     for epoch in range(start_epoch, MAX_EPOCH):
         start_time = time.time()
 
-        # Adjust learning rates
+        # تنظیم نرخ یادگیری
         if epoch >= EPOCHS_BEFORE_DECAY:
             generator_scheduler.step()
             discriminator_scheduler.step()
 
-        print(f"Epoch {epoch + 1}/{MAX_EPOCH}, Learning Rate: {generator_optimizer.param_groups[0]['lr']:.5f}")
+        print(f"دوره {epoch + 1}/{MAX_EPOCH}, نرخ یادگیری: {generator_optimizer.param_groups[0]['lr']:.5f}")
 
         gen_losses = []
         disc_losses = []
@@ -388,108 +383,104 @@ def main():
                 batch_size,
                 pretraining=(epoch < PRETRAINING_EPOCHS),
                 generator_optimizer=generator_optimizer,
-                discriminator_optimizer=discriminator_optimizer,
+                discriminator_optimizer=discriminator_optimizer
             )
             gen_losses.append(gen_loss)
             if disc_loss is not None:
                 disc_losses.append(disc_loss)
 
         end_time = time.time()
-        print(f"Time for epoch {epoch + 1}: {end_time - start_time:.2f} seconds")
-        print(f"Average Generator Loss: {np.mean(gen_losses):.5f}")
+        print(f"زمان برای دوره {epoch + 1}: {end_time - start_time:.2f} ثانیه")
+        print(f"میانگین هزینه Generator: {np.mean(gen_losses):.5f}")
         if disc_losses:
-            print(f"Average Discriminator Loss: {np.mean(disc_losses):.5f}")
+            print(f"میانگین هزینه Discriminator: {np.mean(disc_losses):.5f}")
 
-        # Save model every 15 epochs
+        # ذخیره مدل هر ۱۵ دوره
         if (epoch + 1) % 15 == 0:
-            torch.save(
-                {
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                    'generator_optimizer_state_dict': generator_optimizer.state_dict(),
-                    'discriminator_optimizer_state_dict': discriminator_optimizer.state_dict(),
-                    'best_mmd_overall': best_mmd_overall,
-                    'best_epoch': best_epoch,
-                },
-                checkpoint_path,
-            )
-            print(f"Model saved at epoch {epoch + 1}")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'generator_optimizer_state_dict': generator_optimizer.state_dict(),
+                'discriminator_optimizer_state_dict': discriminator_optimizer.state_dict(),
+                'best_mmd_overall': best_mmd_overall,
+                'best_epoch': best_epoch
+            }, checkpoint_path)
+            print(f"مدل در دوره {epoch + 1} ذخیره شد.")
 
-        # Evaluation and MMD calculation
+        # ارزیابی مدل با استفاده از MMD
         model.eval()
         validation_songs = []
         with torch.no_grad():
             for i in range(len(validate)):
-                # Prepare conditioning data
+                song_data = torch.rand(1, SONGLENGTH, NUM_MIDI_FEATURES).to(device)
                 if CONDITION:
-                    conditioning_data = validate[i, SONGLENGTH * NUM_MIDI_FEATURES :].reshape(
-                        1, SONGLENGTH, NUM_SYLLABLE_FEATURES
-                    )
+                    conditioning_data = validate[i, SONGLENGTH * NUM_MIDI_FEATURES:].reshape(1, SONGLENGTH, NUM_SYLLABLE_FEATURES)
                     conditioning_data = torch.tensor(conditioning_data, dtype=torch.float32).to(device)
                 else:
                     conditioning_data = None
 
-                # Generate song
                 generated_features = model.generate(1, conditioning_data, training=False)
                 sample = generated_features.cpu().numpy().squeeze(0)
                 discretized_sample = utils.discretize(sample)
-                discretized_sample = np.array(discretized_sample)
+                discretized_sample = np.array(discretized_sample)  # تبدیل به آرایه NumPy
                 validation_songs.append(discretized_sample)
 
-            # Compute MMD
-            val_gen_pitches = np.array([song[:, 0] for song in validation_songs])
-            val_dat_pitches = validate[:, : NUM_MIDI_FEATURES * SONGLENGTH : NUM_MIDI_FEATURES]
-            MMD_pitch = mmd.Compute_MMD(val_gen_pitches, val_dat_pitches)
-            print("MMD pitch:", MMD_pitch)
+        # محاسبه MMD
+        val_gen_pitches = np.array([song[:, 0] for song in validation_songs])
+        val_dat_pitches = validate[:, :NUM_MIDI_FEATURES * SONGLENGTH:NUM_MIDI_FEATURES]
+        MMD_pitch = mmd.Compute_MMD(val_gen_pitches, val_dat_pitches)
+        print("MMD pitch:", MMD_pitch)
 
-            val_gen_duration = np.array([song[:, 1] for song in validation_songs])
-            val_dat_duration = validate[:, 1 : NUM_MIDI_FEATURES * SONGLENGTH : NUM_MIDI_FEATURES]
-            MMD_duration = mmd.Compute_MMD(val_gen_duration, val_dat_duration)
-            print("MMD duration:", MMD_duration)
+        val_gen_duration = np.array([song[:, 1] for song in validation_songs])
+        val_dat_duration = validate[:, 1:NUM_MIDI_FEATURES * SONGLENGTH:NUM_MIDI_FEATURES]
+        MMD_duration = mmd.Compute_MMD(val_gen_duration, val_dat_duration)
+        print("MMD duration:", MMD_duration)
 
-            val_gen_rests = np.array([song[:, 2] for song in validation_songs])
-            val_dat_rests = validate[:, 2 : NUM_MIDI_FEATURES * SONGLENGTH : NUM_MIDI_FEATURES]
-            MMD_rest = mmd.Compute_MMD(val_gen_rests, val_dat_rests)
-            print("MMD rest:", MMD_rest)
+        val_gen_rests = np.array([song[:, 2] for song in validation_songs])
+        val_dat_rests = validate[:, 2:NUM_MIDI_FEATURES * SONGLENGTH:NUM_MIDI_FEATURES]
+        MMD_rest = mmd.Compute_MMD(val_gen_rests, val_dat_rests)
+        print("MMD rest:", MMD_rest)
 
-            MMD_overall = MMD_pitch + MMD_duration + MMD_rest
-            print("MMD overall:", MMD_overall)
+        MMD_overall = MMD_pitch + MMD_duration + MMD_rest
+        print("MMD overall:", MMD_overall)
 
-            # Save best model based on MMD overall
-            if MMD_overall < best_mmd_overall:
-                print(f"Best model at epoch {epoch + 1} with MMD overall: {MMD_overall:.5f}")
-                best_mmd_overall = MMD_overall
-                best_epoch = epoch + 1
-                torch.save(model.state_dict(), f"./saved_gan_models/best_model_{best_epoch}.pth")
+        # ذخیره بهترین مدل بر اساس MMD overall
+        if MMD_overall < best_mmd_overall:
+            print(f"بهترین مدل در دوره {epoch + 1} با MMD overall: {MMD_overall:.5f}")
+            best_mmd_overall = MMD_overall
+            best_epoch = epoch + 1
+            torch.save(model.state_dict(), './saved_gan_models/best_model.pth')
+        
+            # ... [Existing code above]
 
-            # Compute metrics as per your request
-            midi_numbers_span_list = []
-            repetitions_3_list = []
-            repetitions_2_list = []
-            unique_midi_numbers_list = []
-            notes_without_rest_list = []
-            average_rest_value_list = []
-            song_length_list = []
+# Initialize lists to store metrics
+        midi_numbers_span_list = []
+        repetitions_3_list = []
+        repetitions_2_list = []
+        unique_midi_numbers_list = []
+        notes_without_rest_list = []
+        average_rest_value_list = []
+        song_length_list = []
 
-            # Validation loop for metrics computation
+        # Validation loop
+        model.eval()
+        validation_songs = []
+        with torch.no_grad():
             for i in range(len(validate)):
-                # Prepare conditioning data
+                song_data = torch.rand(1, SONGLENGTH, NUM_MIDI_FEATURES).to(device)
                 if CONDITION:
-                    conditioning_data = validate[i, SONGLENGTH * NUM_MIDI_FEATURES :].reshape(
-                        1, SONGLENGTH, NUM_SYLLABLE_FEATURES
-                    )
+                    conditioning_data = validate[i, SONGLENGTH * NUM_MIDI_FEATURES:].reshape(1, SONGLENGTH, NUM_SYLLABLE_FEATURES)
                     conditioning_data = torch.tensor(conditioning_data, dtype=torch.float32).to(device)
                 else:
                     conditioning_data = None
 
-                # Generate song
                 generated_features = model.generate(1, conditioning_data, training=False)
                 sample = generated_features.cpu().numpy().squeeze(0)
                 discretized_sample = utils.discretize(sample)
                 discretized_sample = midi_statistics.tune_song(discretized_sample)
                 discretized_sample = np.array(discretized_sample)
                 validation_songs.append(discretized_sample)
-                # print("SAMPLE: ",len(sample)
+
                 # Compute metrics for the current song
                 midi_numbers = discretized_sample[:, 0]  # Assuming the first column is MIDI note numbers
                 rest_values = discretized_sample[:, 2]   # Assuming the third column is rest durations
@@ -522,25 +513,28 @@ def main():
                 song_length = len(midi_numbers)
                 song_length_list.append(song_length)
 
-            # After processing all songs, compute the average metrics
-            avg_midi_span = np.mean(midi_numbers_span_list)
-            avg_repetitions_3 = np.mean(repetitions_3_list)
-            avg_repetitions_2 = np.mean(repetitions_2_list)
-            avg_unique_midi_numbers = np.mean(unique_midi_numbers_list)
-            avg_notes_without_rest = np.mean(notes_without_rest_list)
-            avg_average_rest_value = np.mean(average_rest_value_list)
-            avg_song_length = np.mean(song_length_list)
+        # After processing all songs, compute the average metrics
+        avg_midi_span = np.mean(midi_numbers_span_list)
+        avg_repetitions_3 = np.mean(repetitions_3_list)
+        avg_repetitions_2 = np.mean(repetitions_2_list)
+        avg_unique_midi_numbers = np.mean(unique_midi_numbers_list)
+        avg_notes_without_rest = np.mean(notes_without_rest_list)
+        avg_average_rest_value = np.mean(average_rest_value_list)
+        avg_song_length = np.mean(song_length_list)
 
-            # Print the metrics
-            print(f"Average MIDI Numbers Span: {avg_midi_span:.1f}")
-            print(f"Average 3-MIDI Numbers Repetitions: {avg_repetitions_3:.1f}")
-            print(f"Average 2-MIDI Numbers Repetitions: {avg_repetitions_2:.1f}")
-            print(f"Average Number of Unique MIDI: {avg_unique_midi_numbers:.1f}")
-            print(f"Average Number of Notes Without Rest: {avg_notes_without_rest:.1f}")
-            print(f"Average Rest Value Within Song: {avg_average_rest_value:.1f}")
-            print(f"Average Song Length: {avg_song_length:.1f}")
+        # Print the metrics
+        print(f"Average MIDI Numbers Span: {avg_midi_span:.1f}")
+        print(f"Average 3-MIDI Numbers Repetitions: {avg_repetitions_3:.1f}")
+        print(f"Average 2-MIDI Numbers Repetitions: {avg_repetitions_2:.1f}")
+        print(f"Average Number of Unique MIDI: {avg_unique_midi_numbers:.1f}")
+        print(f"Average Number of Notes Without Rest: {avg_notes_without_rest:.1f}")
+        print(f"Average Rest Value Within Song: {avg_average_rest_value:.1f}")
+        print(f"Average Song Length: {avg_song_length:.1f}")
 
-    print(f"Best model at epoch {best_epoch} with MMD overall: {best_mmd_overall:.5f}")
+        # ... [Rest of your code]
+
+
+    print(f"بهترین مدل در دوره {best_epoch} با MMD overall: {best_mmd_overall:.5f}")
 
 if __name__ == '__main__':
     main()
