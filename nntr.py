@@ -124,8 +124,8 @@ class RNNGAN(nn.Module):
         )
         self.discriminator_output_linear = nn.Linear(HIDDEN_SIZE_D, 1)
         self.discriminator_sigmoid = nn.Sigmoid()
+        self.discriminator_dropout = nn.Dropout(p=1 - DROPOUT_KEEP_PROB)
 
-        # Loss functions
         self.bce_loss = nn.BCELoss()
         self.mse_loss = nn.MSELoss()
 
@@ -210,6 +210,7 @@ class RNNGAN(nn.Module):
             total_loss = real_loss + fake_loss
 
         return total_loss
+    
 def train_step(model, song_data, conditioning_data, wrong_conditioning_data, batch_size, pretraining, generator_optimizer, discriminator_optimizer):
     device = next(model.parameters()).device
     model.train()
@@ -230,8 +231,8 @@ def train_step(model, song_data, conditioning_data, wrong_conditioning_data, bat
         gen_loss = model.mse_loss(generated_songs, song_data)
         gen_loss.backward()
         # کلیپینگ گرادیان
-        torch.nn.utils.clip_grad_norm_(model.generator_lstm.parameters(), MAX_GRAD_NORM)
-        torch.nn.utils.clip_grad_norm_(model.generator_dense.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.generator_transformer.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.generator_input_linear.parameters(), MAX_GRAD_NORM)
         generator_optimizer.step()
         disc_loss = None
     else:
@@ -245,8 +246,8 @@ def train_step(model, song_data, conditioning_data, wrong_conditioning_data, bat
         disc_loss = model.discriminator_loss(real_output, fake_output, wrong_output)
         disc_loss.backward()
         # کلیپینگ گرادیان
-        torch.nn.utils.clip_grad_norm_(model.discriminator_lstm.parameters(), MAX_GRAD_NORM)
-        torch.nn.utils.clip_grad_norm_(model.discriminator_dense.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.discriminator_transformer.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.discriminator_output_linear.parameters(), MAX_GRAD_NORM)
         discriminator_optimizer.step()
 
         # به‌روزرسانی Generator
@@ -256,8 +257,8 @@ def train_step(model, song_data, conditioning_data, wrong_conditioning_data, bat
         gen_loss = model.generator_loss(fake_output)
         gen_loss.backward()
         # کلیپینگ گرادیان
-        torch.nn.utils.clip_grad_norm_(model.generator_lstm.parameters(), MAX_GRAD_NORM)
-        torch.nn.utils.clip_grad_norm_(model.generator_dense.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.generator_transformer.parameters(), MAX_GRAD_NORM)
+        torch.nn.utils.clip_grad_norm_(model.generator_input_linear.parameters(), MAX_GRAD_NORM)
         generator_optimizer.step()
 
     return gen_loss.item(), disc_loss.item() if disc_loss is not None else None
@@ -318,11 +319,11 @@ def main():
 
     # تنظیم بهینه‌سازها
     if ADAM:
-        generator_optimizer = optim.Adam(list(model.generator_lstm.parameters()) + list(model.generator_dense.parameters()), lr=LEARNING_RATE)
-        discriminator_optimizer = optim.Adam(list(model.discriminator_lstm.parameters()) + list(model.discriminator_dense.parameters()), lr=LEARNING_RATE * D_LR_FACTOR)
+        generator_optimizer = optim.Adam(list(model.generator_transformer.parameters()) + list(model.generator_input_linear.parameters()), lr=LEARNING_RATE)
+        discriminator_optimizer = optim.Adam(list(model.discriminator_transformer.parameters()) + list(model.discriminator_output_linear.parameters()), lr=LEARNING_RATE * D_LR_FACTOR)
     else:
-        generator_optimizer = optim.SGD(list(model.generator_lstm.parameters()) + list(model.generator_dense.parameters()), lr=LEARNING_RATE)
-        discriminator_optimizer = optim.SGD(list(model.discriminator_lstm.parameters()) + list(model.discriminator_dense.parameters()), lr=LEARNING_RATE * D_LR_FACTOR)
+        generator_optimizer = optim.SGD(list(model.generator_transformer.parameters()) + list(model.generator_input_linear.parameters()), lr=LEARNING_RATE)
+        discriminator_optimizer = optim.SGD(list(model.discriminator_transformer.parameters()) + list(model.discriminator_output_linear.parameters()), lr=LEARNING_RATE * D_LR_FACTOR)
 
     # تنظیم برنامه‌ریزی نرخ یادگیری
     def lr_lambda(epoch):
