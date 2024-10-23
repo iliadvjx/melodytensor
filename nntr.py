@@ -59,7 +59,7 @@ SONGLENGTH_CEILING = 20
 # Set number of heads
 NUM_HEADS_G = 8
 NUM_HEADS_D = 8  # Adjusted to match the padded embed_dim
-
+a = True
 class TransformerGAN(nn.Module):
     def __init__(self, num_song_features, num_meta_features, songlength, conditioning='multi'):
         super(TransformerGAN, self).__init__()
@@ -134,9 +134,11 @@ class TransformerGAN(nn.Module):
         generator_input = self.generator_positional_encoding(generator_input)
 
         gen_output = self.generator_transformer(generator_input)
-
-        gen_output = gen_output.permute(1, 0, 2)
-        generated_features = self.generator_dense(gen_output)
+        b = gen_output.permute(1, 0, 2)
+        if a:
+            print(gen_output.shape, generator_input.shape, b.shape)
+            a = False
+        generated_features = self.generator_dense(b)
 
         return generated_features
     def discriminate(self, song_data, conditioning_data=None, training=True):
