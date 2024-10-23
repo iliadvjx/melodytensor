@@ -485,7 +485,7 @@ def main():
                 discretized_sample = midi_statistics.tune_song(discretized_sample)
                 discretized_sample = np.array(discretized_sample)
                 validation_songs.append(discretized_sample)
-                print("SAMPLE: ",sample)
+                print("SAMPLE: ",len(sample))
                 # Compute metrics for the current song
                 midi_numbers = discretized_sample[:, 0]  # Assuming the first column is MIDI note numbers
                 rest_values = discretized_sample[:, 2]   # Assuming the third column is rest durations
