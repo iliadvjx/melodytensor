@@ -528,8 +528,7 @@ def main():
                 repetitions_2_list.append(repetitions_2)
 
                 # Number of Unique MIDI numbers
-                # unique_midi_numbers = len(np.unique(midi_numbers))
-                unique_midi_numbers =  midi_statistics.count_repetitions(midi_numbers, n=1)
+                unique_midi_numbers = len(np.unique(midi_numbers))
                 unique_midi_numbers_list.append(unique_midi_numbers)
 
                 # Number of Notes Without Rest
