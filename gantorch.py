@@ -106,7 +106,6 @@ class RNNGAN(nn.Module):
             generator_input = self.generator_dropout(generator_input)
 
         gen_output, _ = self.generator_lstm(generator_input)
-        print(gen_output.shape, generator_input.shape)
         generated_features = self.generator_dense(gen_output)
         return generated_features
 
