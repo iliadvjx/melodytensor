@@ -21,7 +21,7 @@ ATTENTION_LENGTH = 0
 FEED_COND_D = True
 RANDOM_INPUT_DIM = 100  # Adjusted to make the input dimension divisible by NUM_HEADS_G
 DROPOUT_KEEP_PROB = 0.1
-D_LR_FACTOR = 1
+D_LR_FACTOR = 0.1
 LEARNING_RATE = 0.0001
 PRETRAINING_D = False
 LR_DECAY = 0.98
@@ -184,7 +184,9 @@ class Discriminator(nn.Module):
 
         # Add positional encoding
         discriminator_input = self.discriminator_pos_encoder(discriminator_input)
-
+        if training:
+            noise = torch.randn_like(discriminator_input) * 0.1  # Adjust noise level as needed
+            discriminator_input += noise
         if training and DROPOUT_KEEP_PROB < 1.0:
             discriminator_input = F.dropout(discriminator_input, p=self.dropout, training=training)
 
@@ -208,13 +210,19 @@ def generator_loss(fake_output):
     return nn.BCELoss()(fake_output, target)
 
 def discriminator_loss(real_output, fake_output, wrong_output=None):
-    real_target = torch.empty_like(real_output).uniform_(0.7, 1.2)
-    fake_target = torch.empty_like(fake_output).uniform_(0.0, 0.3)
+    real_target = torch.full_like(real_output, 0.9)  # Label Smoothing
+    fake_target = torch.zeros_like(fake_output)
 
     real_loss = nn.BCELoss()(real_output, real_target)
     fake_loss = nn.BCELoss()(fake_output, fake_target)
 
-    total_loss = real_loss + fake_loss
+    if wrong_output is not None and LOSS_WRONG_D:
+        wrong_target = torch.zeros_like(wrong_output)
+        wrong_loss = nn.BCELoss()(wrong_output, wrong_target)
+        total_loss = real_loss + fake_loss + wrong_loss
+    else:
+        total_loss = real_loss + fake_loss
+
     return total_loss
 
 # Update train_step function
@@ -418,8 +426,7 @@ def main():
             if disc_loss is not None:
                 disc_losses.append(disc_loss)
 
-        end_time = time.time()
-        print(f"Time for epoch {epoch + 1}: {end_time - start_time:.2f} seconds")
+
         print(f"Average Generator Loss: {np.mean(gen_losses):.5f}")
         if disc_losses:
             print(f"Average Discriminator Loss: {np.mean(disc_losses):.5f}")
@@ -540,7 +547,8 @@ def main():
             print(f"Average Number of Notes Without Rest: {avg_notes_without_rest:.1f}")
             print(f"Average Rest Value Within Song: {avg_average_rest_value:.1f}")
             print(f"Average Song Length: {avg_song_length:.1f}")
-            
+            end_time = time.time()
+            print(f"Time for epoch {epoch + 1}: {end_time - start_time:.2f} seconds")
             print("==========================@@@@===========================")
             # Save best model based on MMD overall
             if MMD_overall < best_mmd_overall:
