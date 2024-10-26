@@ -225,7 +225,7 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
     )[0]
 
     # Compute gradient norm
-    gradients = gradients.view(batch_size, -1)
+    gradients = gradients.reshape(batch_size, -1)
     gradient_norm = gradients.norm(2, dim=1)
 
     # Compute gradient penalty
