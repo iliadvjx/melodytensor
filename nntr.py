@@ -314,56 +314,60 @@ def generator_loss(fake_output):
 
 #     return gen_loss.item(), disc_loss.item() if disc_loss is not None else None
 
-def train_step(generator, discriminator, song_data, conditioning_data, batch_size, generator_optimizer, discriminator_optimizer):
+def train_step(generator, discriminator, song_data, conditioning_data, batch_size, generator_optimizer=None, discriminator_optimizer=None):
     device = next(generator.parameters()).device
-    generator.train()
-    discriminator.train()
     song_data = song_data.to(device)
     if conditioning_data is not None:
         conditioning_data = conditioning_data.to(device)
+    gen_loss = None
+    disc_loss = None
 
     # =======================
     # Train Discriminator
     # =======================
-    discriminator_optimizer.zero_grad()
+    if discriminator_optimizer is not None:
+        discriminator.train()
+        discriminator_optimizer.zero_grad()
 
-    # Generate fake songs
-    with torch.no_grad():
-        fake_songs = generator(batch_size, conditioning_data, training=True)
+        # Generate fake songs
+        with torch.no_grad():
+            fake_songs = generator(batch_size, conditioning_data, training=True)
 
-    # Compute discriminator outputs
-    real_output = discriminator(song_data, conditioning_data)
-    fake_output = discriminator(fake_songs, conditioning_data)
+        # Compute discriminator outputs
+        real_output = discriminator(song_data, conditioning_data)
+        fake_output = discriminator(fake_songs, conditioning_data)
 
-    # Compute gradient penalty
-    gradient_penalty = compute_gradient_penalty(discriminator, song_data, fake_songs, conditioning_data)
+        # Compute gradient penalty
+        gradient_penalty = compute_gradient_penalty(discriminator, song_data, fake_songs, conditioning_data)
 
-    # Compute discriminator loss
-    disc_loss = discriminator_loss(real_output, fake_output, gradient_penalty)
+        # Compute discriminator loss
+        disc_loss = discriminator_loss(real_output, fake_output, gradient_penalty)
 
-    # Backward and optimize
-    disc_loss.backward()
-    discriminator_optimizer.step()
+        # Backward and optimize
+        disc_loss.backward()
+        discriminator_optimizer.step()
 
     # =======================
     # Train Generator
     # =======================
-    generator_optimizer.zero_grad()
+    if generator_optimizer is not None:
+        generator.train()
+        generator_optimizer.zero_grad()
 
-    # Generate fake songs
-    fake_songs = generator(batch_size, conditioning_data, training=True)
+        # Generate fake songs
+        fake_songs = generator(batch_size, conditioning_data, training=True)
 
-    # Compute discriminator output on fake songs
-    fake_output = discriminator(fake_songs, conditioning_data)
+        # Compute discriminator output on fake songs
+        fake_output = discriminator(fake_songs, conditioning_data)
 
-    # Compute generator loss
-    gen_loss = generator_loss(fake_output)
+        # Compute generator loss
+        gen_loss = generator_loss(fake_output)
 
-    # Backward and optimize
-    gen_loss.backward()
-    generator_optimizer.step()
+        # Backward and optimize
+        gen_loss.backward()
+        generator_optimizer.step()
 
-    return gen_loss.item(), disc_loss.item()
+    return gen_loss.item() if gen_loss is not None else None, disc_loss.item() if disc_loss is not None else None
 
 
 def main():
