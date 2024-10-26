@@ -208,19 +208,13 @@ def generator_loss(fake_output):
     return nn.BCELoss()(fake_output, target)
 
 def discriminator_loss(real_output, fake_output, wrong_output=None):
-    real_target = torch.full_like(real_output, 0.9)  # Label Smoothing
-    fake_target = torch.zeros_like(fake_output)
+    real_target = torch.empty_like(real_output).uniform_(0.7, 1.2)
+    fake_target = torch.empty_like(fake_output).uniform_(0.0, 0.3)
 
     real_loss = nn.BCELoss()(real_output, real_target)
     fake_loss = nn.BCELoss()(fake_output, fake_target)
 
-    if wrong_output is not None and LOSS_WRONG_D:
-        wrong_target = torch.zeros_like(wrong_output)
-        wrong_loss = nn.BCELoss()(wrong_output, wrong_target)
-        total_loss = real_loss + fake_loss + wrong_loss
-    else:
-        total_loss = real_loss + fake_loss
-
+    total_loss = real_loss + fake_loss
     return total_loss
 
 # Update train_step function
