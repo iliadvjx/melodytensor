@@ -9,6 +9,10 @@ import time
 import mmd
 import math
 import torch.nn.functional as F
+# import torch
+torch.backends.cuda.enable_flash_sdp(False)
+torch.backends.cuda.enable_math_sdp(True)
+torch.backends.cuda.enable_mem_efficient_sdp(False)
 
 # Define constants
 REG_CONSTANT = 0.1
