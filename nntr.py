@@ -168,7 +168,7 @@ class Discriminator(nn.Module):
             num_layers=NUM_LAYERS_D
         )
         self.discriminator_output_linear = nn.Linear(HIDDEN_SIZE_D, 1)
-        self.discriminator_sigmoid = nn.Sigmoid()
+        # Remove self.discriminator_sigmoid
 
     def forward(self, song_data, conditioning_data=None, training=True):
         device = next(self.parameters()).device
@@ -184,9 +184,7 @@ class Discriminator(nn.Module):
 
         # Add positional encoding
         discriminator_input = self.discriminator_pos_encoder(discriminator_input)
-        if training:
-            noise = torch.randn_like(discriminator_input) * 0.1  # Adjust noise level as needed
-            discriminator_input += noise
+
         if training and DROPOUT_KEEP_PROB < 1.0:
             discriminator_input = F.dropout(discriminator_input, p=self.dropout, training=training)
 
@@ -198,83 +196,171 @@ class Discriminator(nn.Module):
 
         # Pass through output layer
         decision = self.discriminator_output_linear(disc_output)
-        decision = self.discriminator_sigmoid(decision)
-
-        # Mean over time dimension
         decision = decision.mean(dim=1).squeeze()
         return decision
 
-# Loss functions outside the models
+
+def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditioning_data):
+    batch_size = real_samples.size(0)
+    device = real_samples.device
+
+    # Random weight term for interpolation between real and fake samples
+    alpha = torch.rand(batch_size, 1, 1, device=device)
+    alpha = alpha.expand_as(real_samples)
+
+    # Get random interpolation between real and fake samples
+    interpolated = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+
+    # Forward pass through discriminator
+    interpolated_output = discriminator(interpolated, conditioning_data)
+
+    # Compute gradients w.r.t. the interpolated outputs
+    gradients = torch.autograd.grad(
+        outputs=interpolated_output,
+        inputs=interpolated,
+        grad_outputs=torch.ones_like(interpolated_output),
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True,
+    )[0]
+
+    # Compute gradient norm
+    gradients = gradients.view(batch_size, -1)
+    gradient_norm = gradients.norm(2, dim=1)
+
+    # Compute gradient penalty
+    gradient_penalty = ((gradient_norm - 1) ** 2).mean()
+    return gradient_penalty
+
+def discriminator_loss(real_output, fake_output, gradient_penalty_weight):
+    return fake_output.mean() - real_output.mean() + gradient_penalty_weight
+
 def generator_loss(fake_output):
-    target = torch.ones_like(fake_output)
-    return nn.BCELoss()(fake_output, target)
+    return -fake_output.mean()
 
-def discriminator_loss(real_output, fake_output, wrong_output=None):
-    real_target = torch.full_like(real_output, 0.9)  # Label Smoothing
-    fake_target = torch.zeros_like(fake_output)
+# Loss functions outside the models
+# def generator_loss(fake_output):
+#     target = torch.ones_like(fake_output)
+#     return nn.BCELoss()(fake_output, target)
 
-    real_loss = nn.BCELoss()(real_output, real_target)
-    fake_loss = nn.BCELoss()(fake_output, fake_target)
+# def discriminator_loss(real_output, fake_output, wrong_output=None):
+#     real_target = torch.full_like(real_output, 0.9)  # Label Smoothing
+#     fake_target = torch.zeros_like(fake_output)
 
-    if wrong_output is not None and LOSS_WRONG_D:
-        wrong_target = torch.zeros_like(wrong_output)
-        wrong_loss = nn.BCELoss()(wrong_output, wrong_target)
-        total_loss = real_loss + fake_loss + wrong_loss
-    else:
-        total_loss = real_loss + fake_loss
+#     real_loss = nn.BCELoss()(real_output, real_target)
+#     fake_loss = nn.BCELoss()(fake_output, fake_target)
 
-    return total_loss
+#     if wrong_output is not None and LOSS_WRONG_D:
+#         wrong_target = torch.zeros_like(wrong_output)
+#         wrong_loss = nn.BCELoss()(wrong_output, wrong_target)
+#         total_loss = real_loss + fake_loss + wrong_loss
+#     else:
+#         total_loss = real_loss + fake_loss
+
+#     return total_loss
 
 # Update train_step function
-def train_step(generator, discriminator, song_data, conditioning_data, wrong_conditioning_data, batch_size, pretraining, generator_optimizer, discriminator_optimizer):
+# def train_step(generator, discriminator, song_data, conditioning_data, wrong_conditioning_data, batch_size, pretraining, generator_optimizer, discriminator_optimizer):
+#     device = next(generator.parameters()).device
+#     generator.train()
+#     discriminator.train()
+#     song_data = song_data.to(device)
+#     if conditioning_data is not None:
+#         conditioning_data = conditioning_data.to(device)
+#     if wrong_conditioning_data is not None:
+#         wrong_conditioning_data = wrong_conditioning_data.to(device)
+
+#     # Zero gradients
+#     generator_optimizer.zero_grad()
+#     if not pretraining:
+#         discriminator_optimizer.zero_grad()
+
+#     generated_songs = generator(batch_size, conditioning_data, training=True)
+
+#     if pretraining:
+#         gen_loss = nn.MSELoss()(generated_songs, song_data)
+#         gen_loss.backward()
+#         # Gradient clipping
+#         torch.nn.utils.clip_grad_norm_(generator.parameters(), MAX_GRAD_NORM)
+#         generator_optimizer.step()
+#         disc_loss = None
+#     else:
+#         real_output = discriminator(song_data, conditioning_data)
+#         fake_output = discriminator(generated_songs.detach(), conditioning_data)
+#         if wrong_conditioning_data is not None and LOSS_WRONG_D:
+#             wrong_output = discriminator(song_data, wrong_conditioning_data)
+#         else:
+#             wrong_output = None
+
+#         disc_loss = discriminator_loss(real_output, fake_output, wrong_output)
+#         disc_loss.backward()
+#         # Gradient clipping
+#         torch.nn.utils.clip_grad_norm_(discriminator.parameters(), MAX_GRAD_NORM)
+#         discriminator_optimizer.step()
+
+#         # Update Generator
+#         generator_optimizer.zero_grad()
+#         generated_songs = generator(batch_size, conditioning_data, training=True)
+#         fake_output = discriminator(generated_songs, conditioning_data)
+#         gen_loss = generator_loss(fake_output)
+#         gen_loss.backward()
+#         # Gradient clipping
+#         torch.nn.utils.clip_grad_norm_(generator.parameters(), MAX_GRAD_NORM)
+#         generator_optimizer.step()
+
+#     return gen_loss.item(), disc_loss.item() if disc_loss is not None else None
+
+def train_step(generator, discriminator, song_data, conditioning_data, batch_size, generator_optimizer, discriminator_optimizer):
     device = next(generator.parameters()).device
     generator.train()
     discriminator.train()
     song_data = song_data.to(device)
     if conditioning_data is not None:
         conditioning_data = conditioning_data.to(device)
-    if wrong_conditioning_data is not None:
-        wrong_conditioning_data = wrong_conditioning_data.to(device)
 
-    # Zero gradients
+    # =======================
+    # Train Discriminator
+    # =======================
+    discriminator_optimizer.zero_grad()
+
+    # Generate fake songs
+    with torch.no_grad():
+        fake_songs = generator(batch_size, conditioning_data, training=True)
+
+    # Compute discriminator outputs
+    real_output = discriminator(song_data, conditioning_data)
+    fake_output = discriminator(fake_songs, conditioning_data)
+
+    # Compute gradient penalty
+    gradient_penalty = compute_gradient_penalty(discriminator, song_data, fake_songs, conditioning_data)
+
+    # Compute discriminator loss
+    disc_loss = discriminator_loss(real_output, fake_output, gradient_penalty)
+
+    # Backward and optimize
+    disc_loss.backward()
+    discriminator_optimizer.step()
+
+    # =======================
+    # Train Generator
+    # =======================
     generator_optimizer.zero_grad()
-    if not pretraining:
-        discriminator_optimizer.zero_grad()
 
-    generated_songs = generator(batch_size, conditioning_data, training=True)
+    # Generate fake songs
+    fake_songs = generator(batch_size, conditioning_data, training=True)
 
-    if pretraining:
-        gen_loss = nn.MSELoss()(generated_songs, song_data)
-        gen_loss.backward()
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(generator.parameters(), MAX_GRAD_NORM)
-        generator_optimizer.step()
-        disc_loss = None
-    else:
-        real_output = discriminator(song_data, conditioning_data)
-        fake_output = discriminator(generated_songs.detach(), conditioning_data)
-        if wrong_conditioning_data is not None and LOSS_WRONG_D:
-            wrong_output = discriminator(song_data, wrong_conditioning_data)
-        else:
-            wrong_output = None
+    # Compute discriminator output on fake songs
+    fake_output = discriminator(fake_songs, conditioning_data)
 
-        disc_loss = discriminator_loss(real_output, fake_output, wrong_output)
-        disc_loss.backward()
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(discriminator.parameters(), MAX_GRAD_NORM)
-        discriminator_optimizer.step()
+    # Compute generator loss
+    gen_loss = generator_loss(fake_output)
 
-        # Update Generator
-        generator_optimizer.zero_grad()
-        generated_songs = generator(batch_size, conditioning_data, training=True)
-        fake_output = discriminator(generated_songs, conditioning_data)
-        gen_loss = generator_loss(fake_output)
-        gen_loss.backward()
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(generator.parameters(), MAX_GRAD_NORM)
-        generator_optimizer.step()
+    # Backward and optimize
+    gen_loss.backward()
+    generator_optimizer.step()
 
-    return gen_loss.item(), disc_loss.item() if disc_loss is not None else None
+    return gen_loss.item(), disc_loss.item()
+
 
 def main():
     # Load data
@@ -346,14 +432,14 @@ def main():
         generator_optimizer = optim.Adam(
             generator.parameters(),
             lr=LEARNING_RATE,
-            betas=(0.9, 0.999),
-            weight_decay=1e-5,
+            betas=(0.5, 0.999),
+            # weight_decay=1e-5,
         )
         discriminator_optimizer = optim.Adam(
             discriminator.parameters(),
             lr=LEARNING_RATE * D_LR_FACTOR,
-            betas=(0.9, 0.999),
-            weight_decay=1e-5,
+            betas=(0.5, 0.999),
+            # weight_decay=1e-5,
         )
     else:
         generator_optimizer = optim.SGD(generator.parameters(), lr=LEARNING_RATE)
@@ -386,7 +472,7 @@ def main():
         best_mmd_overall = checkpoint['best_mmd_overall']
         best_epoch = checkpoint['best_epoch']
         print(f"Loaded model from checkpoint at epoch {start_epoch}")
-
+    n_critic = 5
     # Main training loop
     for epoch in range(start_epoch, MAX_EPOCH):
         start_time = time.time()
@@ -410,17 +496,24 @@ def main():
                 wrong_conditioning_data = None
 
             batch_size = song_data.size(0)
-
-            gen_loss, disc_loss = train_step(
+            for _ in range(n_critic):
+                gen_loss, disc_loss = train_step(
+                    generator,
+                    discriminator,
+                    song_data,
+                    conditioning_data,
+                    batch_size,
+                    generator_optimizer=generator_optimizer,
+                    discriminator_optimizer=discriminator_optimizer,
+                )
+            gen_loss, _ = train_step(
                 generator,
                 discriminator,
                 song_data,
                 conditioning_data,
-                wrong_conditioning_data,
                 batch_size,
-                pretraining=(epoch < PRETRAINING_EPOCHS),
                 generator_optimizer=generator_optimizer,
-                discriminator_optimizer=discriminator_optimizer,
+                discriminator_optimizer=None,  # No discriminator update
             )
             gen_losses.append(gen_loss)
             if disc_loss is not None:
