@@ -27,7 +27,7 @@ FEED_COND_D = True
 RANDOM_INPUT_DIM = 100  # Adjusted to make the input dimension divisible by NUM_HEADS_G
 DROPOUT_KEEP_PROB = 0.1
 D_LR_FACTOR = 0.1
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.01
 PRETRAINING_D = False
 LR_DECAY = 0.98
 DATA_MATRIX = "data/processed_dataset_matrices/full_data_matrix.npy"
@@ -441,14 +441,14 @@ def main():
         generator_optimizer = optim.Adam(
             generator.parameters(),
             lr=LEARNING_RATE,
-            betas=(0.9, 0.98),
-            weight_decay=1e-5,
+            # betas=(0.9, 0.98),
+            # weight_decay=1e-5,
         )
         discriminator_optimizer = optim.Adam(
             discriminator.parameters(),
             lr=LEARNING_RATE * D_LR_FACTOR,
-            betas=(0.9, 0.98),
-            weight_decay=1e-5,
+            # betas=(0.9, 0.98),
+            # weight_decay=1e-5,
         )
     else:
         generator_optimizer = optim.SGD(generator.parameters(), lr=LEARNING_RATE)
@@ -482,6 +482,8 @@ def main():
         best_epoch = checkpoint['best_epoch']
         print(f"Loaded model from checkpoint at epoch {start_epoch}")
     n_critic = 5
+    last_G_loss = 0
+    last_D_loss = 0
     # Main training loop
     for epoch in range(start_epoch, MAX_EPOCH):
         start_time = time.time()
@@ -528,11 +530,15 @@ def main():
             if disc_loss is not None:
                 disc_losses.append(disc_loss)
 
-
-        print(f"Average Generator Loss: {np.mean(gen_losses):.5f}")
+        gLoss = np.mean(gen_losses)
+        
+        print(f"Average Generator Loss: {gLoss:.8f}, Different From last: {(last_G_loss - gLoss):.8f}")
         if disc_losses:
-            print(f"Average Discriminator Loss: {np.mean(disc_losses):.5f}")
+            dLoss = np.mean(disc_losses)
+            print(f"Average Discriminator Loss: {dLoss:.8f}, Different From last: {(last_D_loss - dLoss):.8f}")
+            last_D_loss = dLoss
 
+        last_G_loss = gLoss
         # Save model every 15 epochs
         if (epoch + 1) % 15 == 0:
             torch.save(
