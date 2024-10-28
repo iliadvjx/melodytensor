@@ -26,7 +26,7 @@ ATTENTION_LENGTH = 0
 FEED_COND_D = True
 RANDOM_INPUT_DIM = 100  # Adjusted to make the input dimension divisible by NUM_HEADS_G
 DROPOUT_KEEP_PROB = 0.1
-D_LR_FACTOR = 0.1
+D_LR_FACTOR = 0.3
 LEARNING_RATE = 0.01
 PRETRAINING_D = False
 LR_DECAY = 0.98
@@ -441,13 +441,13 @@ def main():
         generator_optimizer = optim.Adam(
             generator.parameters(),
             lr=LEARNING_RATE,
-            # betas=(0.9, 0.98),
+            betas=(0.9, 0.98),
             # weight_decay=1e-5,
         )
         discriminator_optimizer = optim.Adam(
             discriminator.parameters(),
             lr=LEARNING_RATE * D_LR_FACTOR,
-            # betas=(0.9, 0.98),
+            betas=(0.9, 0.98),
             # weight_decay=1e-5,
         )
     else:
@@ -567,7 +567,7 @@ def main():
         notes_without_rest_list = []
         average_rest_value_list = []
         song_length_list = []
-        
+        mmdLast = 0
         
         with torch.no_grad():
             for i in range(len(validate)):
@@ -637,7 +637,9 @@ def main():
 
             MMD_overall = MMD_pitch + MMD_duration + MMD_rest
             print("MMD overall:", MMD_overall)
-
+            print(f"Different From Last: {(MMD_overall - mmdLast):.5f}")
+            print(f"Different From Best: {(best_mmd_overall - MMD_overall):.5f}")
+            mmdLast = MMD_overall
 # After processing all songs, compute the average metrics
             avg_midi_span = np.mean(midi_numbers_span_list)
             avg_repetitions_3 = np.mean(repetitions_3_list)
