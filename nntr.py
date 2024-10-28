@@ -43,7 +43,7 @@ PRETRAINING_EPOCHS = 1
 NUM_MIDI_FEATURES = 3
 NUM_SYLLABLE_FEATURES = 20
 NUM_SONGS = 5000000
-BATCH_SIZE = 512
+BATCH_SIZE = 256
 REG_SCALE = 1.0
 TRAIN_RATE = 0.8
 VALIDATION_RATE = 0.1
@@ -471,16 +471,16 @@ def main():
     start_epoch = 0
     best_mmd_overall = np.inf
     best_epoch = 0
-    if os.path.exists(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path)
-        generator.load_state_dict(checkpoint['generator_state_dict'])
-        discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
-        generator_optimizer.load_state_dict(checkpoint['generator_optimizer_state_dict'])
-        discriminator_optimizer.load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
-        start_epoch = checkpoint['epoch'] + 1
-        best_mmd_overall = checkpoint['best_mmd_overall']
-        best_epoch = checkpoint['best_epoch']
-        print(f"Loaded model from checkpoint at epoch {start_epoch}")
+    # if os.path.exists(checkpoint_path):
+    #     checkpoint = torch.load(checkpoint_path)
+    #     generator.load_state_dict(checkpoint['generator_state_dict'])
+    #     discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
+    #     generator_optimizer.load_state_dict(checkpoint['generator_optimizer_state_dict'])
+    #     discriminator_optimizer.load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
+    #     start_epoch = checkpoint['epoch'] + 1
+    #     best_mmd_overall = checkpoint['best_mmd_overall']
+    #     best_epoch = checkpoint['best_epoch']
+    #     print(f"Loaded model from checkpoint at epoch {start_epoch}")
     n_critic = 5
     last_G_loss = 0
     last_D_loss = 0
