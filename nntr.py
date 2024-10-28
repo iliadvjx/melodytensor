@@ -8,7 +8,7 @@ import os
 import time
 import mmd
 import math
-import tqdm
+from tqdm import tqdm
 import torch.nn.functional as F
 # import torch
 torch.backends.cuda.enable_flash_sdp(False)
