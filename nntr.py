@@ -8,6 +8,7 @@ import os
 import time
 import mmd
 import math
+import tqdm
 import torch.nn.functional as F
 # import torch
 torch.backends.cuda.enable_flash_sdp(False)
@@ -50,7 +51,7 @@ HIDDEN_SIZE_G = 512
 HIDDEN_SIZE_D = 256
 NUM_LAYERS_G = 6
 NUM_LAYERS_D = 4
-ADAM = False
+ADAM = True
 DISABLE_L2_REG = True
 MAX_GRAD_NORM = 5.0
 FEATURE_MATCHING = True
@@ -440,14 +441,14 @@ def main():
         generator_optimizer = optim.Adam(
             generator.parameters(),
             lr=LEARNING_RATE,
-            betas=(0.5, 0.999),
-            # weight_decay=1e-5,
+            betas=(0.9, 0.98),
+            weight_decay=1e-5,
         )
         discriminator_optimizer = optim.Adam(
             discriminator.parameters(),
             lr=LEARNING_RATE * D_LR_FACTOR,
-            betas=(0.5, 0.999),
-            # weight_decay=1e-5,
+            betas=(0.9, 0.98),
+            weight_decay=1e-5,
         )
     else:
         generator_optimizer = optim.SGD(generator.parameters(), lr=LEARNING_RATE)
@@ -495,7 +496,7 @@ def main():
         gen_losses = []
         disc_losses = []
 
-        for batch_data in dataloader:
+        for batch_data in tqdm(dataloader):
             if CONDITION:
                 song_data, conditioning_data, wrong_conditioning_data = batch_data
             else:
