@@ -141,7 +141,7 @@ class Generator(nn.Module):
         gen_output = self.generator_transformer(generator_input)
 
         # Transform back to [batch_size, sequence_length, model_dim]
-        # gen_output = gen_output.transpose(0, 1)
+        gen_output = gen_output.transpose(0, 1)
         generated_features = self.generator_output_linear(gen_output)
         return generated_features
 
@@ -198,7 +198,7 @@ class Discriminator(nn.Module):
         disc_output = self.discriminator_transformer(discriminator_input)
 
         # Transform back to [batch_size, sequence_length, model_dim]
-        disc_output = disc_output.transpose(0, 1)
+        # disc_output = disc_output.transpose(0, 1)
 
         # Pass through output layer
         decision = self.discriminator_output_linear(disc_output)
