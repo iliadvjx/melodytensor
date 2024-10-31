@@ -25,7 +25,7 @@ RANDOM_INPUT_SCALE = 44
 ATTENTION_LENGTH = 0
 FEED_COND_D = True
 RANDOM_INPUT_DIM = 100  # Adjusted to make the input dimension divisible by NUM_HEADS_G
-DROPOUT_KEEP_PROB = 0.1
+DROPOUT_KEEP_PROB = 0.9
 D_LR_FACTOR = 0.3
 LEARNING_RATE = 0.01
 PRETRAINING_D = False
@@ -104,7 +104,8 @@ class Generator(nn.Module):
             nhead=self.num_heads,
             dim_feedforward=HIDDEN_SIZE_G * 4,
             dropout=self.dropout,
-            activation='gelu'
+            activation='gelu',
+            batch_first=True
         )
         self.generator_transformer = nn.TransformerEncoder(
             encoder_layer_generator,
@@ -140,7 +141,7 @@ class Generator(nn.Module):
         gen_output = self.generator_transformer(generator_input)
 
         # Transform back to [batch_size, sequence_length, model_dim]
-        gen_output = gen_output.transpose(0, 1)
+        # gen_output = gen_output.transpose(0, 1)
         generated_features = self.generator_output_linear(gen_output)
         return generated_features
 
@@ -165,7 +166,7 @@ class Discriminator(nn.Module):
             d_model=HIDDEN_SIZE_D,
             nhead=self.num_heads,
             dim_feedforward=HIDDEN_SIZE_D * 4,
-            dropout=self.dropout,
+            dropout=0.1,
             activation='gelu'
         )
         self.discriminator_transformer = nn.TransformerEncoder(
@@ -237,8 +238,8 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
     gradient_penalty = ((gradient_norm - 1) ** 2).mean()
     return gradient_penalty
 
-def discriminator_loss(real_output, fake_output, gradient_penalty_weight):
-    return fake_output.mean() - real_output.mean() + gradient_penalty_weight
+def discriminator_loss(real_output, fake_output, gradient_penalty_weight, lambda_gp=10):
+    return fake_output.mean() - real_output.mean() + lambda_gp * gradient_penalty_weight
 
 def generator_loss(fake_output):
     return -fake_output.mean()
@@ -441,13 +442,13 @@ def main():
         generator_optimizer = optim.Adam(
             generator.parameters(),
             lr=LEARNING_RATE,
-            betas=(0.9, 0.98),
+            betas=(0.0, 0.9 ),
             # weight_decay=1e-5,
         )
         discriminator_optimizer = optim.Adam(
             discriminator.parameters(),
             lr=LEARNING_RATE * D_LR_FACTOR,
-            betas=(0.9, 0.98),
+            betas=(0.0, 0.9),
             # weight_decay=1e-5,
         )
     else:
