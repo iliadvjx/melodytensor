@@ -130,7 +130,7 @@ class Generator(nn.Module):
             generator_input = self.generator_dropout(generator_input)
         # Project input to model dimension
         generator_input = self.generator_input_linear(generator_input)
-        # generator_input = generator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
+        generator_input = generator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
 
         # Add positional encoding
         generator_input = self.generator_pos_encoder(generator_input)
@@ -190,7 +190,7 @@ class Discriminator(nn.Module):
 
         # Project input to model dimension
         discriminator_input = self.discriminator_input_linear(discriminator_input)
-        # discriminator_input = discriminator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
+        discriminator_input = discriminator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
 
         # Add positional encoding
         discriminator_input = self.discriminator_pos_encoder(discriminator_input)
