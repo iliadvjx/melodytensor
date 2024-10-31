@@ -466,8 +466,8 @@ def main():
         else:
             return LR_DECAY ** (epoch - EPOCHS_BEFORE_DECAY + 1)
 
-    generator_scheduler = optim.lr_scheduler.LambdaLR(generator_optimizer, lr_lambda=lr_lambda)
-    discriminator_scheduler = optim.lr_scheduler.LambdaLR(discriminator_optimizer, lr_lambda=lr_lambda)
+    # generator_scheduler = optim.lr_scheduler.LambdaLR(generator_optimizer, lr_lambda=lr_lambda)
+    # discriminator_scheduler = optim.lr_scheduler.LambdaLR(discriminator_optimizer, lr_lambda=lr_lambda)
 
     # Load checkpoint if exists
     checkpoint_dir = './training_checkpoints'
