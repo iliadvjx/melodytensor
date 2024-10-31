@@ -121,8 +121,6 @@ class Generator(nn.Module):
         )
 
         if self.conditioning == 'multi' and conditioning_data is not None:
-            conditioning_data = conditioning_data.unsqueeze(1)  # شکل: [batch_size, 1, num_meta_features]
-            conditioning_data = conditioning_data.expand(-1, self.songlength, -1)  # شکل: [batch_size, songlength, num_meta_features]
             generator_input = torch.cat([random_input, conditioning_data], dim=-1)
         else:
             generator_input = random_input
@@ -183,9 +181,8 @@ class Discriminator(nn.Module):
     def forward(self, song_data, conditioning_data=None, training=True):
         # device = next(self.parameters()).device
 
+
         if self.conditioning == 'multi' and conditioning_data is not None and FEED_COND_D:
-            conditioning_data = conditioning_data.unsqueeze(1)  # شکل: [batch_size, 1, num_meta_features]
-            conditioning_data = conditioning_data.expand(-1, song_data.size(1), -1)  # شکل: [batch_size, songlength, num_meta_features]
             discriminator_input = torch.cat([song_data, conditioning_data], dim=-1)
         else:
             discriminator_input = song_data
