@@ -55,7 +55,7 @@ ADAM = True
 DISABLE_L2_REG = True
 MAX_GRAD_NORM = 5.0
 FEATURE_MATCHING = True
-MAX_EPOCH = 500
+MAX_EPOCH = 200
 EPOCHS_BEFORE_DECAY = 30
 SONGLENGTH_CEILING = 20
 
@@ -476,16 +476,16 @@ def main():
     start_epoch = 0
     best_mmd_overall = np.inf
     best_epoch = 0
-    # if os.path.exists(checkpoint_path):
-    #     checkpoint = torch.load(checkpoint_path)
-    #     generator.load_state_dict(checkpoint['generator_state_dict'])
-    #     discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
-    #     generator_optimizer.load_state_dict(checkpoint['generator_optimizer_state_dict'])
-    #     discriminator_optimizer.load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
-    #     start_epoch = checkpoint['epoch'] + 1
-    #     best_mmd_overall = checkpoint['best_mmd_overall']
-    #     best_epoch = checkpoint['best_epoch']
-    #     print(f"Loaded model from checkpoint at epoch {start_epoch}")
+    if os.path.exists(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path)
+        generator.load_state_dict(checkpoint['generator_state_dict'])
+        discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
+        generator_optimizer.load_state_dict(checkpoint['generator_optimizer_state_dict'])
+        discriminator_optimizer.load_state_dict(checkpoint['discriminator_optimizer_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_mmd_overall = checkpoint['best_mmd_overall']
+        best_epoch = checkpoint['best_epoch']
+        print(f"Loaded model from checkpoint at epoch {start_epoch}")
     n_critic = 5
     last_G_loss = 0
     last_D_loss = 0
