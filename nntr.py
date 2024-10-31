@@ -25,9 +25,9 @@ RANDOM_INPUT_SCALE = 44
 ATTENTION_LENGTH = 0
 FEED_COND_D = True
 RANDOM_INPUT_DIM = 100  # Adjusted to make the input dimension divisible by NUM_HEADS_G
-DROPOUT_KEEP_PROB = 0.9
-D_LR_FACTOR = 0.3
-LEARNING_RATE = 0.01
+DROPOUT_PROB  = 0.1
+D_LR_FACTOR = 0.5
+LEARNING_RATE = 1e-4
 PRETRAINING_D = False
 LR_DECAY = 0.98
 DATA_MATRIX = "data/processed_dataset_matrices/full_data_matrix.npy"
@@ -93,8 +93,8 @@ class Generator(nn.Module):
 
         # Transformer parameters
         self.num_heads = NUM_HEADS_G
-        self.dropout = DROPOUT_KEEP_PROB
-        self.generator_dropout = nn.Dropout(p=DROPOUT_KEEP_PROB)
+        self.dropout = DROPOUT_PROB
+        self.generator_dropout = nn.Dropout(p=DROPOUT_PROB)
         # Generator layers
         input_size_generator = RANDOM_INPUT_DIM + (num_meta_features if conditioning == 'multi' else 0)
         self.generator_input_linear = nn.Linear(input_size_generator, HIDDEN_SIZE_G)
@@ -104,7 +104,8 @@ class Generator(nn.Module):
             nhead=self.num_heads,
             dim_feedforward=HIDDEN_SIZE_G * 4,
             dropout=0.1,
-            activation='gelu'
+            activation='gelu',
+            batch_first=True
         )
         self.generator_transformer = nn.TransformerEncoder(
             encoder_layer_generator,
@@ -120,20 +121,23 @@ class Generator(nn.Module):
         )
 
         if self.conditioning == 'multi' and conditioning_data is not None:
+            conditioning_data = conditioning_data.unsqueeze(1)  # شکل: [batch_size, 1, num_meta_features]
+            conditioning_data = conditioning_data.expand(-1, self.songlength, -1)  # شکل: [batch_size, songlength, num_meta_features]
             generator_input = torch.cat([random_input, conditioning_data], dim=-1)
         else:
             generator_input = random_input
 
-        if training and DROPOUT_KEEP_PROB < 1.0:
+
+        if training and DROPOUT_PROB  < 1.0:
             generator_input = self.generator_dropout(generator_input)
         # Project input to model dimension
         generator_input = self.generator_input_linear(generator_input)
-        generator_input = generator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
+        # generator_input = generator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
 
         # Add positional encoding
         generator_input = self.generator_pos_encoder(generator_input)
 
-        if training and DROPOUT_KEEP_PROB < 1.0:
+        if training and DROPOUT_PROB  < 1.0:
             generator_input = F.dropout(generator_input, p=self.dropout, training=training)
 
         # Transformer expects [sequence_length, batch_size, model_dim]
@@ -155,8 +159,8 @@ class Discriminator(nn.Module):
 
         # Transformer parameters
         self.num_heads = NUM_HEADS_D
-        self.dropout = DROPOUT_KEEP_PROB
-        self.discriminator_dropout = nn.Dropout(p=DROPOUT_KEEP_PROB)
+        self.dropout = DROPOUT_PROB 
+        self.discriminator_dropout = nn.Dropout(p=DROPOUT_PROB )
         # Discriminator layers
         input_size_discriminator = num_song_features + (num_meta_features if conditioning == 'multi' and FEED_COND_D else 0)
         self.discriminator_input_linear = nn.Linear(input_size_discriminator, HIDDEN_SIZE_D)
@@ -177,28 +181,31 @@ class Discriminator(nn.Module):
         # Remove self.discriminator_sigmoid
 
     def forward(self, song_data, conditioning_data=None, training=True):
-        device = next(self.parameters()).device
+        # device = next(self.parameters()).device
 
         if self.conditioning == 'multi' and conditioning_data is not None and FEED_COND_D:
+            conditioning_data = conditioning_data.unsqueeze(1)  # شکل: [batch_size, 1, num_meta_features]
+            conditioning_data = conditioning_data.expand(-1, song_data.size(1), -1)  # شکل: [batch_size, songlength, num_meta_features]
             discriminator_input = torch.cat([song_data, conditioning_data], dim=-1)
         else:
             discriminator_input = song_data
 
+
         # Project input to model dimension
         discriminator_input = self.discriminator_input_linear(discriminator_input)
-        discriminator_input = discriminator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
+        # discriminator_input = discriminator_input.transpose(0, 1)  # [seq_len, batch_size, model_dim]
 
         # Add positional encoding
         discriminator_input = self.discriminator_pos_encoder(discriminator_input)
 
-        if training and DROPOUT_KEEP_PROB < 1.0:
+        if training and DROPOUT_PROB  < 1.0:
             discriminator_input = F.dropout(discriminator_input, p=self.dropout, training=training)
 
         # Transformer expects [sequence_length, batch_size, model_dim]
         disc_output = self.discriminator_transformer(discriminator_input)
 
         # Transform back to [batch_size, sequence_length, model_dim]
-        # disc_output = disc_output.transpose(0, 1)
+        disc_output = disc_output.transpose(0, 1)
 
         # Pass through output layer
         decision = self.discriminator_output_linear(disc_output)
