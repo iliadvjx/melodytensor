@@ -103,9 +103,8 @@ class Generator(nn.Module):
             d_model=HIDDEN_SIZE_G,
             nhead=self.num_heads,
             dim_feedforward=HIDDEN_SIZE_G * 4,
-            dropout=self.dropout,
-            activation='gelu',
-            batch_first=True
+            dropout=0.1,
+            activation='gelu'
         )
         self.generator_transformer = nn.TransformerEncoder(
             encoder_layer_generator,
@@ -167,7 +166,8 @@ class Discriminator(nn.Module):
             nhead=self.num_heads,
             dim_feedforward=HIDDEN_SIZE_D * 4,
             dropout=0.1,
-            activation='gelu'
+            activation='gelu',
+            batch_first=True
         )
         self.discriminator_transformer = nn.TransformerEncoder(
             encoder_layer_discriminator,
