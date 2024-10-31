@@ -494,9 +494,9 @@ def main():
         start_time = time.time()
 
         # Adjust learning rates
-        if epoch >= EPOCHS_BEFORE_DECAY:
-            generator_scheduler.step()
-            discriminator_scheduler.step()
+        # if epoch >= EPOCHS_BEFORE_DECAY:
+        #     generator_scheduler.step()
+        #     discriminator_scheduler.step()
 
         print(f"Epoch {epoch + 1}/{MAX_EPOCH}, Learning Rate: {generator_optimizer.param_groups[0]['lr']:.5f}")
 
