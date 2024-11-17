@@ -41,7 +41,7 @@ def make_rnn_cell(rnn_layer_sizes,
         cell = tf.compat.v1.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=dropout_keep_prob)
         cells.append(cell)
     cell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(cells, state_is_tuple=state_is_tuple)
-    print("RNN cell" ,rnn_layer_sizes , cell)
+    # print("RNN cell" ,rnn_layer_sizes , cell)
 
     
 # RNN cell [400, 400] <keras.layers.rnn.legacy_cells.MultiRNNCell object at 0x000002516F29A080>
@@ -322,7 +322,7 @@ class RNNGAN(object):
         inputs = [tf.nn.dropout(input_, rate=1 - (keep_prob)) for input_ in inputs]
 
         # lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.hidden_size_d, forget_bias=1.0, state_is_tuple=True)
-        print(cell_fw, msg)
+        # print(cell_fw, msg)
 
         # cell_fw = tf.nn.rnn_cell.MultiRNNCell([lstm_cell for _ in range( FLAGS.num_layers_d)], state_is_tuple=True)
         self._initial_state_fw = cell_fw.zero_state(self.batch_size, tf.float32)
@@ -515,7 +515,7 @@ def main():
           "Test set: ", np.shape(test)[0], " songs.")
 
     # Epoch counter initialization
-    global_step = 30
+    global_step = 0
 
     # empty lists for saving loss values at the end of each epoch
     train_g_loss_output = []
@@ -907,7 +907,7 @@ def main():
                     for i in range(SONGLENGTH):
                         val_gen_duration[:, i] = np.array(validation_songs)[:, i, 0]
                         val_dat_duration[:, i] = np.array(validate)[:, NUM_MIDI_FEATURES * i]
-                    print(val_gen_duration[3])
+                    # print(val_gen_duration[3])
 
                     MMD_duration = mmd.Compute_MMD(val_gen_duration, val_dat_duration)
                     print("MMD duration:", MMD_duration)
